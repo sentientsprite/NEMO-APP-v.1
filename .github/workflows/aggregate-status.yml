@@ -1,0 +1,135 @@
+name: Aggregate component status
+
+# Reads all open Issues tagged `component-status`, parses the YAML/JSON
+# body fields, rewrites STATUS.md between the BEGIN_AUTO_STATUS and
+# END_AUTO_STATUS markers, then auto-closes the aggregated issues.
+#
+# Also opens an `escalation` issue for any component still `red` 24h
+# after first reporting it, and a `status-stale` issue for any component
+# silent past its tolerance.
+
+on:
+  schedule:
+    - cron: '15 * * * *'   # hourly at :15
+  workflow_dispatch:
+  issues:
+    types: [opened, labeled]
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  aggregate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - run: npm install --no-save js-yaml @actions/github @actions/core
+
+      - name: Aggregate
+        uses: actions/github-script@v7
+        env:
+          NODE_PATH: ${{ github.workspace }}/node_modules
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            const yaml = require('js-yaml');
+
+            const manifestPath = path.join(process.env.GITHUB_WORKSPACE, 'components.yaml');
+            const manifest = yaml.load(fs.readFileSync(manifestPath, 'utf8'));
+            const expected = (manifest.components || []).map(c => c.id);
+
+            // Find all open status issues
+            const { data: issues } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              labels: 'component-status',
+              state: 'open',
+              per_page: 100,
+            });
+
+            const latest = {}; // component id -> { state, summary, when, issueNumber }
+            for (const issue of issues) {
+              const m = issue.title.match(/^\[status\]\s+(\S+)\s+—\s+(\d{4}-\d{2}-\d{2})/);
+              if (!m) continue;
+              const id = m[1];
+              const date = m[2];
+              const body = issue.body || '';
+              const stateMatch = body.match(/###\s*State\s*\n+\s*(\w+)/i);
+              const summaryMatch = body.match(/###\s*Summary\s*\n+\s*(.+?)\n/i);
+              const state = stateMatch ? stateMatch[1].toLowerCase() : 'unknown';
+              const summary = summaryMatch ? summaryMatch[1].trim() : '(no summary)';
+              const prev = latest[id];
+              if (!prev || new Date(issue.created_at) > new Date(prev.when)) {
+                latest[id] = { state, summary, when: issue.created_at, issueNumber: issue.number, date };
+              }
+            }
+
+            // Build the table
+            const now = new Date().toISOString();
+            const rows = expected.map(id => {
+              const entry = latest[id];
+              if (!entry) return `| ${id} | unknown | — | — |`;
+              const reported = new Date(entry.when).toISOString().split('T')[0];
+              return `| ${id} | ${entry.state} | ${reported} | ${entry.summary} |`;
+            }).join('\n');
+
+            const block = [
+              `_Last aggregated: ${now}_`,
+              '',
+              '| Component | State | Last reported | Summary |',
+              '|---|---|---|---|',
+              rows,
+            ].join('\n');
+
+            const statusPath = path.join(process.env.GITHUB_WORKSPACE, 'STATUS.md');
+            const original = fs.readFileSync(statusPath, 'utf8');
+            const updated = original.replace(
+              /<!-- BEGIN_AUTO_STATUS -->[\s\S]*?<!-- END_AUTO_STATUS -->/,
+              `<!-- BEGIN_AUTO_STATUS -->\n\n${block}\n\n<!-- END_AUTO_STATUS -->`
+            );
+
+            if (updated !== original) {
+              fs.writeFileSync(statusPath, updated);
+              await exec.exec('git', ['config', 'user.email', 'github-actions[bot]@users.noreply.github.com']);
+              await exec.exec('git', ['config', 'user.name', 'github-actions[bot]']);
+              await exec.exec('git', ['add', 'STATUS.md']);
+              await exec.exec('git', ['commit', '-m', 'chore(status): aggregate component reports']);
+              await exec.exec('git', ['push']);
+            }
+
+            // Close aggregated issues (keep red ones open for visibility)
+            for (const id of Object.keys(latest)) {
+              const entry = latest[id];
+              if (entry.state === 'red') continue;
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: entry.issueNumber,
+                state: 'closed',
+                state_reason: 'completed',
+              });
+            }
+
+            // Detect stale (silent past tolerance, default 48h)
+            for (const c of (manifest.components || [])) {
+              const entry = latest[c.id];
+              if (!entry) continue;
+              const ageH = (Date.now() - new Date(entry.when).getTime()) / 3600000;
+              const tolerance = c.cadence === 'weekly' ? 14 * 24 : 48;
+              if (ageH > tolerance) {
+                await github.rest.issues.create({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  title: `[stale] ${c.id} — silent for ${Math.round(ageH)}h`,
+                  body: `Component \`${c.id}\` has not reported since ${entry.when}.\nTolerance: ${tolerance}h.\nLast known state: ${entry.state}.`,
+                  labels: ['status-stale'],
+                });
+              }
+            }

@@ -1,0 +1,49 @@
+# .prana/component.yaml — paste into every component repo at .prana/component.yaml
+#
+# This file declares the role of THIS repo within Prana Marketing
+# Solutions, per BUSINESS_PLAN.md in NEMO-APP-v.1. The trunk's
+# components.yaml manifest must agree with this file.
+
+# Required: must match a components[].id in NEMO-APP-v.1/components.yaml
+id: openclaw
+
+# Required: short, human-readable role
+role: agent_runtime
+
+# Required: which BUSINESS_PLAN.md section justifies this component
+business_plan_section: "5 — The Autonomous Stack"
+
+# Required: where the trunk lives
+trunk:
+  repo: sentientsprite/NEMO-APP-v.1
+
+# Optional: humans / agents responsible for this component
+owners:
+  - raymond
+
+# Required: how often this component MUST report status
+# values: nightly | weekly | release-driven | not_reported
+cadence: nightly
+
+# Optional but encouraged: explicit list of what this component provides
+# to the rest of the system
+provides:
+  - 5_named_agents
+  - cron_scheduler
+  - pranas_local_sandbox
+
+# Optional: what this component depends on
+depends_on:
+  - paperclip-workspace   # for the approval gate
+  - pinchtab              # for browser-side automation
+
+# Optional: how to find this component's local install
+local:
+  config_dir: ~/.openclaw
+  workspace: ~/.openclaw/workspace
+
+# Optional: free-form notes
+notes: |
+  Holds the 5 named agents (Aria, Hunter, Scout, Architect, Validator).
+  Anything client-facing must pass through PRANA-EXECUTE in
+  paperclip-workspace before publish.

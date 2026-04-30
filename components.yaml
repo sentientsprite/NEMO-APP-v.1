@@ -1,0 +1,109 @@
+# components.yaml — machine-readable manifest of all repos in the Prana org.
+#
+# Edited manually when a new repo is added. The aggregator workflow
+# (.github/workflows/aggregate-status.yml) reads this to know which
+# components to expect status reports from, and which to flag if silent
+# for > 48 hours.
+
+trunk:
+  repo: sentientsprite/NEMO-APP-v.1
+  description: |
+    Canonical hub for Prana Marketing Solutions. Holds BUSINESS_PLAN.md,
+    PIPELINE.md, MILESTONES.md, STATUS.md, and the cross-repo
+    coordination protocol.
+
+components:
+  - id: openclaw
+    repo: sentientsprite/openclaw
+    role: agent_runtime
+    business_plan_section: "5 — The Autonomous Stack"
+    runs:
+      - aria
+      - hunter
+      - scout
+      - architect
+      - validator
+    cadence: nightly
+    owner: raymond
+    notes: |
+      OpenClaw 2026.3.12 runs the 5 named agents 24/7 on Mac Mini.
+      Local data lives in ~/.openclaw/ (agents/, cron/, flows/, sandbox/).
+
+  - id: paperclip-workspace
+    repo: sentientsprite/paperclip-workspace
+    role: orchestration
+    business_plan_section: "5 — The Autonomous Stack"
+    provides:
+      - task_scheduling
+      - approval_gate          # PRANA-EXECUTE
+      - audit_trail
+      - budget_caps
+    cadence: nightly
+    owner: raymond
+    notes: |
+      Paperclip 0.3.1. Pending approvals land at
+      ~/.openclaw/workspace/ops/pending/ and surface in the dashboard.
+
+  - id: nemo-workspace
+    repo: sentientsprite/nemo-workspace
+    role: dashboard_and_config
+    business_plan_section: "5 — The Autonomous Stack"
+    provides:
+      - prana_dashboard
+      - agent_persona_config
+      - memory
+      - references
+      - pipeline_view
+    cadence: nightly
+    owner: raymond
+    notes: |
+      Houses the Prana Dashboard. Per-agent personas live under agents/.
+
+  - id: nemo-agent
+    repo: sentientsprite/nemo-agent
+    role: agent_runtime_next
+    business_plan_section: "5 — The Autonomous Stack"
+    status: experimental
+    cadence: nightly
+    owner: raymond
+    notes: |
+      "new build 1.0" — being evaluated as successor to OpenClaw.
+      Validator agent owns the comparison.
+
+  - id: mktg-chrome-extension
+    repo: sentientsprite/MKTG-Chrome-Extenstion
+    role: in_browser_companion
+    business_plan_section: "5 — The Autonomous Stack"
+    provides:
+      - in_flow_signals      # Beacon, Echo, Bloom signals shown inside Google tools
+    cadence: nightly
+    owner: raymond
+    notes: |
+      Chrome MV3 extension. Currently authenticates to Google directly.
+      Phase 4 plan (Nemo SaaS) rewires it as a thin client to a backend.
+
+  - id: autoagent
+    repo: sentientsprite/autoagent
+    role: skill_eval_and_phase4_saas
+    business_plan_section: "5 — The Autonomous Stack (quality net) + Phase 4 (productization)"
+    provides:
+      - skilleval_regression_tests   # Harbor task packs scoring agent skill outputs
+      - nemo_saas_scaffold         # Phase 4 productization (post-Sept 30)
+    cadence: nightly
+    owner: raymond
+    notes: |
+      Fork of thirdlayer/autoagent. tasks/ is the SkillEval harness.
+      nemo-saas/ is the Phase 4 productization scaffold (Next.js +
+      Supabase + Inngest). Not the current product — Prana agency is.
+
+  - id: pinchtab
+    repo: null            # local-only for now
+    role: browser_automation
+    business_plan_section: "5 — The Autonomous Stack"
+    provides:
+      - 800_token_page_extract
+    cadence: not_reported
+    owner: raymond
+    notes: |
+      PinchTab 0.8.4. Lives at ~/.pinchtab/. Promote to a repo when its
+      surface area outgrows config.json.

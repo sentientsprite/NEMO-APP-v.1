@@ -1,0 +1,87 @@
+name: Component Status Report
+description: Nightly status report from a Prana component repo (auto-filed by the report-to-prana workflow).
+title: "[status] <component-id> — <YYYY-MM-DD>"
+labels: ["component-status"]
+body:
+  - type: input
+    id: component
+    attributes:
+      label: Component ID
+      description: Must match a `components[].id` value in components.yaml
+      placeholder: openclaw
+    validations:
+      required: true
+
+  - type: dropdown
+    id: state
+    attributes:
+      label: State
+      description: Overall health right now
+      options:
+        - green
+        - yellow
+        - red
+    validations:
+      required: true
+
+  - type: input
+    id: summary
+    attributes:
+      label: Summary
+      description: One-line headline (≤ 80 chars)
+      placeholder: "All 5 agents ran on schedule; 3 outreach drafts pending approval."
+    validations:
+      required: true
+
+  - type: textarea
+    id: metrics
+    attributes:
+      label: Metrics (JSON)
+      description: |
+        Structured metrics this component tracks. The aggregator parses this.
+        Examples:
+        - openclaw: { "agents_active": 5, "agent_runs_24h": 7, "errors_24h": 0 }
+        - paperclip-workspace: { "approvals_pending": 3, "approvals_24h": 14, "budget_used_pct": 42 }
+        - nemo-workspace: { "dashboard_uptime_pct": 100, "pipeline_rows": 5 }
+        - autoagent: { "skilleval_mean": 0.87, "skilleval_min": 0.71, "tasks_run": 7 }
+      placeholder: |
+        {
+          "agents_active": 5,
+          "agent_runs_24h": 7,
+          "errors_24h": 0
+        }
+      render: json
+    validations:
+      required: true
+
+  - type: textarea
+    id: links
+    attributes:
+      label: Links
+      description: |
+        CI run, dashboard view, or external evidence. Markdown list.
+      placeholder: |
+        - [Last CI run](https://github.com/...)
+        - [Aria's daily summary](http://...)
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: Notes
+      description: Anything humans should see. Free-form.
+
+  - type: input
+    id: window_start
+    attributes:
+      label: Reporting window start (ISO 8601)
+      placeholder: "2026-04-29T00:00:00Z"
+    validations:
+      required: true
+
+  - type: input
+    id: window_end
+    attributes:
+      label: Reporting window end (ISO 8601)
+      placeholder: "2026-04-30T00:00:00Z"
+    validations:
+      required: true
