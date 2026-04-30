@@ -6,7 +6,7 @@
 
 <!-- BEGIN_AUTO_STATUS -->
 
-_Last aggregated: never (waiting for first component report)_
+_Last aggregated: 2026-04-30T06:42:38.043Z_
 
 | Component | State | Last reported | Summary |
 |---|---|---|---|
@@ -14,8 +14,9 @@ _Last aggregated: never (waiting for first component report)_
 | paperclip-workspace | unknown | — | — |
 | nemo-workspace | unknown | — | — |
 | nemo-agent | unknown | — | — |
-| MKTG-Chrome-Extenstion | unknown | — | — |
+| mktg-chrome-extension | unknown | — | — |
 | autoagent | unknown | — | — |
+| pinchtab | unknown | — | — |
 
 <!-- END_AUTO_STATUS -->
 
