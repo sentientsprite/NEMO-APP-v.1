@@ -40,17 +40,13 @@ escalated as a separate Issue tagged `escalation`.
 
 ## Cadence
 
-| Repo | Required cadence | Tolerated silence |
-|---|---|---|
-| `openclaw` | nightly (24h) | 48h before flagged |
-| `paperclip-workspace` | nightly (24h) | 48h |
-| `nemo-workspace` | nightly (24h) | 48h |
-| `nemo-agent` | nightly (24h) | 7 days (experimental) |
-| `MKTG-Chrome-Extenstion` | weekly (release-driven) | 14 days |
-| `autoagent` | nightly (Harbor SkillEval gate) | 48h |
+Each component declares its own `cadence` in `.prana/component.yaml`
+(values: `nightly`, `weekly`, `release-driven`, `not_reported`).
+The aggregator opens a `status-stale` Issue when a component goes
+silent past its tolerance (48h for nightly, 14d for weekly).
 
-Silence beyond the tolerance opens an Issue here tagged
-`status-stale`.
+See [`components.yaml`](components.yaml) for the current cadence per
+component — that file is the source of truth, not this doc.
 
 ## Branching + PR conventions
 

@@ -125,3 +125,41 @@ jobs:
             --title "${{ steps.compose.outputs.title }}" \
             --body "${{ steps.compose.outputs.body }}" \
             --label component-status
+
+# =============================================================================
+# Per-component metric examples — replace the generic metrics block above
+# with one of these in your component repo, then commit. The aggregator on
+# the trunk just needs `state` + `summary` + a JSON `metrics` blob; what's
+# inside `metrics` is yours to define.
+# =============================================================================
+#
+# openclaw — agent runtime
+# ------------------------
+# metrics.agents_active = JSON.parse(execSync('cat ~/.openclaw/openclaw.json')).agents.length;
+# metrics.agent_runs_24h = parseInt(execSync('grep -c agent_run ~/.openclaw/logs/$(date +%Y-%m-%d).log').trim());
+# metrics.errors_24h = parseInt(execSync('grep -c ERROR ~/.openclaw/logs/$(date +%Y-%m-%d).log').trim());
+# if (metrics.errors_24h > 0) state = 'yellow';
+# if (metrics.agents_active < 5) { state = 'red'; summary = `Only ${metrics.agents_active}/5 agents active`; }
+#
+# paperclip-workspace — orchestration / approval gate
+# ---------------------------------------------------
+# const pending = JSON.parse(execSync('cat ~/.paperclip/instances/*/pending.json'));
+# metrics.approvals_pending = pending.length;
+# metrics.approvals_24h = parseInt(execSync('grep -c approved ~/.paperclip/instances/*/log').trim());
+# metrics.budget_used_pct = JSON.parse(execSync('cat ~/.paperclip/instances/*/budget.json')).used_pct;
+# if (metrics.approvals_pending > 10) { state = 'yellow'; summary = `${metrics.approvals_pending} approvals waiting on Raymond`; }
+# if (metrics.budget_used_pct > 90) { state = 'red'; summary = `Budget at ${metrics.budget_used_pct}%`; }
+#
+# nemo-workspace — dashboard + per-client config
+# ----------------------------------------------
+# metrics.dashboard_uptime_pct = /* read from prana-status output */;
+# metrics.pipeline_rows = parseInt(execSync('wc -l < pipeline.csv').trim());
+# metrics.beacon_clients = /* count clients with beacon=true */;
+# metrics.echo_clients = /* count */;
+# metrics.bloom_clients = /* count */;
+#
+# MKTG-Chrome-Extenstion — weekly cadence; change cron to '0 14 * * 1'
+# -------------------------------------------------------------------
+# metrics.manifest_version = JSON.parse(fs.readFileSync('manifest.json')).version;
+# metrics.last_release_age_days = /* from git tag --sort=-creatordate | head -1 */;
+# if (metrics.last_release_age_days > 30) state = 'yellow';
