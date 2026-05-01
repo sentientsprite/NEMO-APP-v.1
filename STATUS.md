@@ -6,7 +6,7 @@
 
 <!-- BEGIN_AUTO_STATUS -->
 
-_Last aggregated: 2026-05-01T00:06:25.224Z_
+_Last aggregated: 2026-05-01T04:18:20.003Z_
 
 | Component | State | Last reported | Summary |
 |---|---|---|---|
@@ -16,7 +16,6 @@ _Last aggregated: 2026-05-01T00:06:25.224Z_
 | nemo-agent | unknown | — | — |
 | mktg-chrome-extension | unknown | — | — |
 | autoagent | unknown | — | — |
-| pinchtab | unknown | — | — |
 
 <!-- END_AUTO_STATUS -->
 
