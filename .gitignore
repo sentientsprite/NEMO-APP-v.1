@@ -1,0 +1,7 @@
+# Trunk root — ignore app build artifacts
+apps/outbound-crm/node_modules/
+apps/outbound-crm/.next/
+apps/outbound-crm/.turbo/
+apps/outbound-crm/.env
+apps/outbound-crm/.env.local
+apps/outbound-crm/.vercel

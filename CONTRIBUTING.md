@@ -16,6 +16,8 @@ Every repo listed in [`components.yaml`](components.yaml) agrees to:
 4. **Defer business strategy** to this repo. Component repos describe
    *how* they work; the trunk describes *why*.
 
+**Concrete wiring steps (PAT, secrets, smoke test):** [`docs/TRUNK_LOOP_SETUP.md`](docs/TRUNK_LOOP_SETUP.md).
+
 ## Status report protocol
 
 Each nightly report opens an Issue here with this title:

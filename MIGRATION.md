@@ -1,5 +1,7 @@
 # Migration — wire each sibling repo to NEMO-APP-v.1
 
+> **Turn-key checklist:** [`docs/TRUNK_LOOP_SETUP.md`](docs/TRUNK_LOOP_SETUP.md) (PAT, labels, secrets, smoke test).
+
 > Step-by-step for connecting each existing component repo to this trunk.
 > ~5 minutes per repo. The canonical implementation is
 > [`scripts/prana-wire.sh`](scripts/prana-wire.sh) — this doc covers the

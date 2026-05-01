@@ -1,0 +1,49 @@
+name: Ensure Prana labels
+
+# Run once after creating the trunk (Actions → this workflow → Run workflow).
+# Creates Issue labels the aggregator and component reporters expect.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  issues: write
+
+jobs:
+  labels:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const labels = [
+              {
+                name: "component-status",
+                color: "0E8A16",
+                description: "Nightly component status report filed against the trunk",
+              },
+              {
+                name: "status-stale",
+                color: "FBCA04",
+                description: "Component silent past its reporting tolerance",
+              },
+              {
+                name: "escalation",
+                color: "D93F0B",
+                description: "Red status persisted; needs human attention",
+              },
+            ];
+            for (const l of labels) {
+              try {
+                await github.rest.issues.createLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  name: l.name,
+                  color: l.color,
+                  description: l.description,
+                });
+                console.log(`created label: ${l.name}`);
+              } catch (e) {
+                console.log(`label ${l.name}: ${e.message}`);
+              }
+            }
