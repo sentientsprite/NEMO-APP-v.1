@@ -5,6 +5,14 @@ import { useRouter } from "next/navigation";
 
 import { createClient } from "@/lib/supabase/client";
 
+function looksLikeHtmlJsonParseError(message: string): boolean {
+  return (
+    message.includes("<!DOCTYPE") ||
+    message.includes("Unexpected token '<'") ||
+    message.includes("is not valid JSON")
+  );
+}
+
 export function LoginForm() {
   const router = useRouter();
   const [email, setEmail] = useState("");
@@ -20,11 +28,26 @@ export function LoginForm() {
       const supabase = createClient();
       const { error: signErr } = await supabase.auth.signInWithPassword({ email, password });
       if (signErr) {
+        if (looksLikeHtmlJsonParseError(signErr.message)) {
+          setError(
+            "Sign-in is talking to the wrong server (got a web page instead of Supabase). In Vercel, set NEXT_PUBLIC_SUPABASE_URL to Supabase → Settings → API → Project URL (https://….supabase.co only), not your Vercel URL. Redeploy after saving."
+          );
+          return;
+        }
         setError(signErr.message);
         return;
       }
       router.refresh();
       router.push("/queue");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (looksLikeHtmlJsonParseError(msg)) {
+        setError(
+          "Sign-in is talking to the wrong server (got a web page instead of Supabase). In Vercel, set NEXT_PUBLIC_SUPABASE_URL to Supabase → Settings → API → Project URL (https://….supabase.co only), not your Vercel URL. Redeploy after saving."
+        );
+      } else {
+        setError(msg);
+      }
     } finally {
       setPending(false);
     }

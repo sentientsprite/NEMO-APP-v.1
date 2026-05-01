@@ -1,40 +1,7 @@
--- Outbound CRM — leads + activity log for Hunter webhook + rep UI
--- Run via Supabase CLI: `supabase db push` from apps/outbound-crm, or paste in SQL editor.
+-- Run this ONLY if `20260430000000_outbound_crm_init.sql` partially applied:
+-- enums exist but tables/triggers/policies were never created (duplicate type error on re-run).
 
 create extension if not exists "pgcrypto";
-
--- -----------------------------------------------------------------------------
--- enums
--- -----------------------------------------------------------------------------
-
-do $$ begin
-  create type outbound_lead_status as enum (
-    'new',
-    'contacted',
-    'no_answer',
-    'follow_up',
-    'qualified',
-    'meeting_booked',
-    'closed_won',
-    'closed_lost'
-  );
-exception
-  when duplicate_object then null;
-end $$;
-
-do $$ begin
-  create type outbound_activity_type as enum (
-    'call_attempt',
-    'note',
-    'status_change'
-  );
-exception
-  when duplicate_object then null;
-end $$;
-
--- -----------------------------------------------------------------------------
--- leads
--- -----------------------------------------------------------------------------
 
 create table public.outbound_leads (
   id uuid primary key default gen_random_uuid(),
@@ -54,7 +21,6 @@ create table public.outbound_leads (
   constraint outbound_leads_external_id_unique unique (external_id)
 );
 
--- Dedupe when Hunter does not send external_id: same person (phone + name)
 create unique index outbound_leads_dedupe_phone_name
   on public.outbound_leads (phone_normalized, lower(trim(name)))
   where external_id is null;
@@ -64,10 +30,6 @@ create index outbound_leads_status_created_idx
 
 create index outbound_leads_source_idx
   on public.outbound_leads (source);
-
--- -----------------------------------------------------------------------------
--- activities (append-only log)
--- -----------------------------------------------------------------------------
 
 create table public.outbound_activities (
   id uuid primary key default gen_random_uuid(),
@@ -82,10 +44,6 @@ create table public.outbound_activities (
 create index outbound_activities_lead_created_idx
   on public.outbound_activities (lead_id, created_at desc);
 
--- -----------------------------------------------------------------------------
--- updated_at
--- -----------------------------------------------------------------------------
-
 create or replace function public.outbound_set_updated_at() returns trigger as $$
 begin
   new.updated_at = now();
@@ -98,11 +56,6 @@ drop trigger if exists outbound_leads_set_updated_at on public.outbound_leads;
 create trigger outbound_leads_set_updated_at
   before update on public.outbound_leads
   for each row execute function public.outbound_set_updated_at();
-
--- -----------------------------------------------------------------------------
--- RLS: any authenticated user = the rep (single-tenant)
--- Service role (webhook) bypasses RLS.
--- -----------------------------------------------------------------------------
 
 alter table public.outbound_leads enable row level security;
 alter table public.outbound_activities enable row level security;
@@ -121,9 +74,6 @@ create policy "outbound_activities_authenticated_all"
   for all
   using (auth.role() = 'authenticated')
   with check (auth.role() = 'authenticated');
-
--- Optional: allow rep to read own user row for assigned_to display
--- (usually enabled by default in Supabase for auth.users — not exposed via API)
 
 comment on table public.outbound_leads is 'Hunter webhook + rep CRM leads; single-tenant, RLS for authenticated rep only.';
 comment on table public.outbound_activities is 'Append-only activity log; call_attempt, note, status_change.';

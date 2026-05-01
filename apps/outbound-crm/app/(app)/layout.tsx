@@ -3,9 +3,14 @@ import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
 
 import { signOutAction } from "@/app/actions/leads";
+import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/server";
 
 export default async function AppShellLayout({ children }: { children: ReactNode }) {
+  if (!isSupabaseConfigured()) {
+    redirect("/");
+  }
+
   const supabase = await createClient();
   const {
     data: { user },

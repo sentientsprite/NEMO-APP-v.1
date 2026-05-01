@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { createAdminClient } from "@/lib/supabase/admin";
+import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { normalizePhone } from "@/lib/phone";
 import { bearerMatchesSecret } from "@/lib/webhook-auth";
 
@@ -21,6 +22,17 @@ function isRecord(v: unknown): v is Record<string, unknown> {
 }
 
 export async function POST(request: Request) {
+  if (!isSupabaseServiceConfigured()) {
+    return NextResponse.json(
+      {
+        error: "server_misconfigured",
+        detail:
+          "Supabase not configured: set NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY, and SUPABASE_SERVICE_ROLE_KEY on the server",
+      },
+      { status: 503 },
+    );
+  }
+
   const secret = process.env.HUNTER_WEBHOOK_SECRET;
   if (!secret) {
     return NextResponse.json({ error: "server_misconfigured", detail: "HUNTER_WEBHOOK_SECRET not set" }, { status: 500 });

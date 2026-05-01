@@ -2,14 +2,15 @@ import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
+import { getPublicSupabaseEnv } from "@/lib/supabase/env";
+
 /**
  * Refresh Supabase Auth session in middleware.
  * IMPORTANT: On Edge (Vercel), `request.cookies` is read-only — never call
  * `request.cookies.set`. Only mutate `NextResponse.cookies` (see Supabase SSR docs).
  */
 export async function updateSession(request: NextRequest) {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
-  const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
+  const { url, anon } = getPublicSupabaseEnv();
 
   if (!url || !anon) {
     return NextResponse.next({ request });

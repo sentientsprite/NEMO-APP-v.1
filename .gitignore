@@ -5,3 +5,4 @@ apps/outbound-crm/.turbo/
 apps/outbound-crm/.env
 apps/outbound-crm/.env.local
 apps/outbound-crm/.vercel
+apps/outbound-crm/tsconfig.tsbuildinfo

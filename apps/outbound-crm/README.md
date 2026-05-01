@@ -22,14 +22,15 @@ npm run dev
 # http://localhost:3010
 ```
 
-## Supabase setup
+## Supabase setup (from zero)
 
-1. Create a [Supabase](https://supabase.com) project (free tier).
-2. **Auth → Providers:** enable Email. **Disable sign-ups** (only the rep account exists — create the user under **Authentication → Users → Add user**, or invite the rep).
-3. Run the SQL migration:
-   - **SQL editor:** paste `supabase/migrations/20260430000000_outbound_crm_init.sql` and run, **or**
-   - **CLI:** `cd apps/outbound-crm && supabase link --project-ref <ref> && supabase db push` (if you use the Supabase CLI).
-4. Copy **Project URL**, **anon key**, and **service_role** key into `.env.local` (see `.env.example`).
+Full checklist: **`docs/SUPABASE_SETUP.md`** (new project, API keys, email Auth user with sign-ups off, Site URL for production, paste **`supabase/migrations/20260430000000_outbound_crm_init.sql`** in the SQL Editor).
+
+Quick recap:
+
+1. **Dashboard → Settings → API** — copy URL, **anon public**, **service_role**.
+2. **Authentication → Users** — **Add user** for your roommate (email + password).
+3. **SQL Editor** — run the migration file above (creates `outbound_leads`, `outbound_activities`, RLS).
 
 ### RLS model (justify)
 
@@ -45,6 +46,23 @@ npm run dev
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Client + server | Supabase anon key (RLS) |
 | `SUPABASE_SERVICE_ROLE_KEY` | Server only | Webhook inserts; never commit |
 | `HUNTER_WEBHOOK_SECRET` | Server only | `Authorization: Bearer …` on webhook |
+
+## Vercel
+
+Add **Settings → Environment Variables** on the Vercel project:
+
+| Variable | Environment |
+|----------|--------------|
+| `NEXT_PUBLIC_SUPABASE_URL` | Production (and Preview if you use it) |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Same |
+| `SUPABASE_SERVICE_ROLE_KEY` | Same — server-only, never expose to client |
+| `HUNTER_WEBHOOK_SECRET` | Same |
+
+Then trigger a **new deployment**.  
+
+**Important:** `NEXT_PUBLIC_*` values are inlined at **`next build`**. After changing them on Vercel, redeploy so the runtime matches what was compiled.
+
+Until URL + anon are present, **`/`** renders an in-app setup notice instead of crashing with “Application error”. The Hunter webhook returns **`503`** with JSON `server_misconfigured` if the service role key is missing.
 
 ## Hunter webhook
 
