@@ -1,6 +1,6 @@
 # Prana — Outbound CRM (MVP)
 
-Internal phone-closer CRM for **one sales rep**. Leads land via **Hunter** HTTP webhook; the rep works a **queue + lead detail** UI with **`tel:`** click-to-call only (no telephony APIs). **Email is paused for v1** — optional **`mailto:`** links in the UI only; no SMTP/Resend/send.
+Internal phone-closer CRM for **one sales rep** — **not** the customer-facing product site. Customer offerings ship on the **`nemo-app-v-1`** Vercel project; this app deploys on **`outbound-crm`** only. Leads land via **Hunter** HTTP webhook; the rep works a **queue + lead detail** UI with **`tel:`** click-to-call only (no telephony APIs). **Email is paused for v1** — optional **`mailto:`** links in the UI only; no SMTP/Resend/send.
 
 - **Stack:** Next.js 15 (App Router), TypeScript, Tailwind, Supabase (Postgres + Auth + RLS).
 - **Cost target:** Vercel Hobby + Supabase free tier (single project shared by rep + webhook).
@@ -49,7 +49,9 @@ Quick recap:
 
 ## Vercel
 
-Add **Settings → Environment Variables** on the Vercel project:
+Use the **internal** Vercel project (**`outbound-crm`** — e.g. `outbound-crm-*.vercel.app`), **not** **`nemo-app-v-1`** (that URL is for customer-facing products). Root directory for this repo: **`apps/outbound-crm`**.
+
+Add **Settings → Environment Variables** on that project:
 
 | Variable | Environment |
 |----------|--------------|
@@ -116,9 +118,9 @@ On **mobile Safari/Chrome**, tap **Call now** — OS dialer should open with E.1
 
 ## Deploy (Vercel)
 
-1. Import the repo; set **Root Directory** to `apps/outbound-crm`.
+1. Create or select project **`outbound-crm`** (separate from **`nemo-app-v-1`**). Import this repo; set **Root Directory** to `apps/outbound-crm`.
 2. Add env vars (same as `.env.example`).
-3. Redeploy. Webhook URL: `https://<project>.vercel.app/api/webhooks/hunter`.
+3. Redeploy. Webhook URL: `https://<outbound-crm-project>.vercel.app/api/webhooks/hunter`.
 
 ## Features (MVP)
 

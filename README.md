@@ -4,7 +4,7 @@
 > [`BUSINESS_PLAN.md`](BUSINESS_PLAN.md) is the source of truth. Every
 > other repository in this org connects to and reports into this one.
 
-This repo answers six questions:
+This repo answers four questions:
 
 1. **What is Prana?** → [`BUSINESS_PLAN.md`](BUSINESS_PLAN.md)
 2. **Which repos run it?** → [`components.yaml`](components.yaml) +
@@ -15,8 +15,6 @@ This repo answers six questions:
    [`MILESTONES.md`](MILESTONES.md)
 
 5. **Are component repos wired into STATUS.md?** → [`docs/TRUNK_LOOP_SETUP.md`](docs/TRUNK_LOOP_SETUP.md)
-
-6. **Outbound CRM (Hunter → rep queue)?** → [`apps/outbound-crm/README.md`](apps/outbound-crm/README.md) + [`docs/OUTBOUND_CRM.md`](docs/OUTBOUND_CRM.md)
 
 ---
 
@@ -87,6 +85,19 @@ Status of productization is tracked in [`MILESTONES.md`](MILESTONES.md).
 
 ---
 
+## Customer vs internal web apps (Vercel)
+
+Keep **two Vercel projects** so customer traffic and internal tooling never share secrets or URLs:
+
+| Vercel project | Audience | Purpose |
+|----------------|----------|---------|
+| **`nemo-app-v-1`** | **Customers** — products we sell | Marketing surfaces, signup flows, customer dashboards, anything buyer-facing. |
+| **`outbound-crm`** | **Internal** — lead hunting / closer CRM | Rep queue, Hunter webhook, Supabase Auth for staff only. Code: **`apps/outbound-crm/`**. |
+
+**Rules of thumb:** Import **`apps/outbound-crm`** only on **`outbound-crm`**. Do not repurpose **`nemo-app-v-1`** for the Hunter webhook or rep login. Each project carries its **own** env vars and deployments.
+
+---
+
 ## Where decisions are recorded
 
 | What | Where |
@@ -96,8 +107,6 @@ Status of productization is tracked in [`MILESTONES.md`](MILESTONES.md).
 | Active prospect pipeline | [`PIPELINE.md`](PIPELINE.md) (this repo) |
 | Time-bound milestones | [`MILESTONES.md`](MILESTONES.md) (this repo) |
 | Per-component code, build, runtime | The component's own repo |
-| Outbound CRM (lead webhook + rep queue) | [`apps/outbound-crm/README.md`](apps/outbound-crm/README.md) |
-| Post-MVP monorepo plan (subtree / workspaces) | [`docs/MONOREPO_ROADMAP.md`](docs/MONOREPO_ROADMAP.md) |
 | Per-component status snapshot | [`STATUS.md`](STATUS.md) (auto-updated here) |
 | Architectural decisions (ADRs) | [`decisions/`](decisions/) (this repo) |
 
@@ -139,9 +148,6 @@ cat PIPELINE.md
 
 # See what ships when
 cat MILESTONES.md
-
-# Outbound CRM (Hunter webhook → rep queue) — see apps/outbound-crm/README.md
-cd apps/outbound-crm && cp .env.example .env.local && npm install && npm run dev
 ```
 
 Daily glance loop:
