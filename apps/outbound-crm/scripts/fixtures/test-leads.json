@@ -1,0 +1,92 @@
+[
+  {
+    "name": "Kris Patel",
+    "company": "Monkey Wrench Plumbing",
+    "phone": "(801) 555-0142",
+    "email": "kris.patel@example.test",
+    "source": "hunter_monday",
+    "notes": "855 reviews · local pack ~#4 · Echo + Beacon fit per pipeline",
+    "external_id": "seed-prana-monkey-wrench"
+  },
+  {
+    "name": "Kris Martinez",
+    "company": "CTR Heating & Air",
+    "phone": "801-555-0143",
+    "email": "kmartinez@example.test",
+    "source": "hunter_monday",
+    "notes": "382 reviews · 8 service areas · Beacon multi-location anchor",
+    "external_id": "seed-prana-ctr-heating"
+  },
+  {
+    "name": "Daniel Nguyen",
+    "company": "White Pine Dental",
+    "phone": "18015550144",
+    "email": "daniel@example.test",
+    "source": "hunter_monday",
+    "notes": "2 locations · Herriman undersold · Beacon + Echo",
+    "external_id": "seed-prana-white-pine-dental"
+  },
+  {
+    "name": "Nelson Jones",
+    "company": "Nelson Jones Legal",
+    "phone": "+1 801 555 0145",
+    "email": "njones@example.test",
+    "source": "hunter_outreach",
+    "notes": "PI West Jordan · Echo timing + Bloom CPC moat",
+    "external_id": "seed-prana-nelson-jones"
+  },
+  {
+    "name": "Carey Larsen",
+    "company": "SLC Landscaping",
+    "phone": "8015550146",
+    "email": "carey@example.test",
+    "source": "hunter_monday",
+    "notes": "Multi-area coverage · spring urgency · Beacon + Bloom",
+    "external_id": "seed-prana-slc-landscaping"
+  },
+  {
+    "name": "Maria Santos",
+    "company": "Bright Smile Dental — Herriman",
+    "phone": "(385) 555-0198",
+    "email": "maria.santos@example.test",
+    "source": "hunter_csv_import",
+    "notes": "Review velocity focus · Echo pilot candidate",
+    "external_id": "seed-prana-bright-smile-herriman"
+  },
+  {
+    "name": "James Olsen",
+    "company": "Summit HVAC",
+    "phone": "4355550162",
+    "email": "james@example.test",
+    "source": "hunter_monday",
+    "notes": "St. George expansion · seasonal demand spike",
+    "external_id": "seed-prana-summit-hvac"
+  },
+  {
+    "name": "Priya Sharma",
+    "company": "Copper Canyon Roofing",
+    "phone": "801-555-0171",
+    "email": "priya@example.test",
+    "source": "hunter_monday",
+    "notes": "Storm season inbound · insurance-adjacent searches up",
+    "external_id": "seed-prana-copper-canyon-roofing"
+  },
+  {
+    "name": "Amy Chen",
+    "company": "Chen Family Law",
+    "phone": "8015550188",
+    "email": "amy.chen@example.test",
+    "source": "hunter_outreach",
+    "notes": "Family law · high CPC keywords · consult funnel tight",
+    "external_id": "seed-prana-chen-family-law"
+  },
+  {
+    "name": "Roberto Vega",
+    "company": "Vega Cocina & Bar",
+    "phone": "8015550199",
+    "email": "roberto@example.test",
+    "source": "hunter_csv_import",
+    "notes": "Restaurant GBP + review cadence · Beacon + Echo combo",
+    "external_id": "seed-prana-vega-cocina"
+  }
+]

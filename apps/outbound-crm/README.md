@@ -116,6 +116,26 @@ curl -sS -X POST "$URL/api/webhooks/hunter" \
 
 On **mobile Safari/Chrome**, tap **Call now** — OS dialer should open with E.164 `tel:`.
 
+## Seed realistic test leads (Vercel + Supabase)
+
+Use the Hunter webhook so you exercise **production** the same way OpenClaw/Hunter will later.
+
+1. In Vercel (**outbound-crm** project), copy **Production** values: deployment URL and **`HUNTER_WEBHOOK_SECRET`** (Settings → Environment Variables — use “reveal”; never commit it).
+2. From **`apps/outbound-crm`**:
+
+```bash
+export WEBHOOK_URL="https://YOUR-OUTBOUND-CRM.vercel.app/api/webhooks/hunter"
+export HUNTER_WEBHOOK_SECRET="paste-production-secret-here"
+
+npm run seed:test-leads
+```
+
+This posts **`scripts/fixtures/test-leads.json`** (10 fictional Utah-style prospects, **`external_id`** prefixed with `seed-prana-*`). Re-running **upserts** the same rows (no duplicate spam). Phones use **`555`** exchanges — safe test numbers.
+
+Optional: `npm run seed:test-leads -- ./path/to/other.json` (path relative to current working directory).
+
+Then sign in → **`/queue`** — default filter **new** should list them (raise **Limit** to 25 if needed).
+
 ## Deploy (Vercel)
 
 1. Create or select project **`outbound-crm`** (separate from **`nemo-app-v-1`**). Import this repo; set **Root Directory** to `apps/outbound-crm`.
