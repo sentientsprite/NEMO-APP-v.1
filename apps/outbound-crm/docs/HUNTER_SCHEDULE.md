@@ -9,8 +9,18 @@ Two supported setups:
 ## A) Cloud schedule — GitHub Actions + Google Places (this repo)
 
 Workflow: **[`.github/workflows/hunter-daily-outbound-crm.yml`](../../../.github/workflows/hunter-daily-outbound-crm.yml)**  
-Script: **[`scripts/hunter-daily-crm-sync.mjs`](../../../scripts/hunter-daily-crm-sync.mjs)**  
-Queries: **[`scripts/hunter-search-queries.json`](../../../scripts/hunter-search-queries.json)** (edit verticals / cities)
+Script: **[`scripts/hunter-daily-crm-sync.mjs`](../../../scripts/hunter-daily-crm-sync.mjs)** — Maps-style discovery, then **Golden Triangle–style ranking** (rating, review volume, website, Beacon/Echo-style boosts) before POSTing. Tunable env vars on the runner: **`MIN_USER_RATINGS_TOTAL`** (default 12), **`MIN_RATING`** (default 3.7), **`POOL_MULTIPLIER`** (default 5), **`MAX_LEADS`**.  
+Queries: **[`scripts/hunter-search-queries.json`](../../../scripts/hunter-search-queries.json)**
+
+### OpenClaw Hunter vs this script
+
+The **OpenClaw gateway** is on GitHub (`sentientsprite/openclaw`), but **Hunter’s prompts, cron, and Maps/PinchTab workflows** usually live under **`~/.openclaw/`** on your Mac Mini (not in git). This Action mirrors **BUSINESS_PLAN.md** Hunter outcomes until the Mini POSTs the same webhook payloads.
+
+**Optional:** snapshot configs from the Mini for review (not executed in CI):
+
+```bash
+rsync -az --exclude '**/secrets/**' user@mini:~/.openclaw/workspace/ ./openclaw-workspace-snapshot/
+```
 
 **Repository secrets** (Settings → Secrets and variables → Actions):
 
@@ -49,6 +59,6 @@ Webhook semantics and examples: **`README.md`** in this app (Hunter webhook sect
 
 ## Operational checks
 
-- CRM queue defaults to **`status=new`** — new webhook rows appear there after sync.
+- CRM queue defaults to **`status=new`** — new webhook rows appear there after sync. Filter **Source** contains `hunter_openclaw_aligned_daily` to see only this job.
 - **`503` / `401`** from webhook → Vercel env or bearer secret mismatch.
-- Places script exits **1** if zero leads posted (no phones found, API error, or webhook failures) — inspect the Actions log.
+- Places script exits **1** if zero leads posted — often **`MIN_USER_RATINGS_TOTAL` / `MIN_RATING` too strict** for your market; lower them in the workflow `env` block for testing.
