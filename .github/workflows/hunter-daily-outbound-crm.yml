@@ -1,20 +1,19 @@
-name: Hunter daily → Outbound CRM
+name: Hunter daily → Outbound CRM (Google Places — needs GCP billing)
 
-# Discovers up to 10 local businesses via Google Places and POSTs them to the
-# Hunter webhook on your Vercel Outbound CRM. Schedule aligns with “once per day”.
+# Optional: Maps discovery once GCP billing + Places API key exist.
+# Until then use workflow "Outbound CRM — fixture leads (no Google Places)".
 #
-# Secrets (repo Settings → Secrets → Actions):
+# Secrets:
 #   GOOGLE_PLACES_API_KEY      — Maps Platform key with Places API enabled
 #   OUTBOUND_CRM_WEBHOOK_URL   — full URL …/api/webhooks/hunter
 #   HUNTER_WEBHOOK_SECRET      — same bearer secret as Vercel Production
 #
-# OpenClaw “real” Hunter on Mac Mini can supersede this job by POSTing the same
-# payloads on its own cron; see apps/outbound-crm/docs/HUNTER_SCHEDULE.md
+# See apps/outbound-crm/docs/HUNTER_SCHEDULE.md
 
 on:
-  schedule:
-    # 14:15 UTC ≈ 07:15 MST (no DST); adjust for your timezone
-    - cron: "15 14 * * *"
+  # Uncomment when GOOGLE_PLACES_API_KEY is configured (GCP billing on).
+  # schedule:
+  #   - cron: "15 14 * * *"
   workflow_dispatch:
     inputs:
       max_leads:

@@ -1,0 +1,30 @@
+name: Outbound CRM — fixture leads (no Google Places)
+
+# Pushes committed JSON fixtures to the Hunter webhook — **no Maps API / no GCP billing**.
+# Use until `GOOGLE_PLACES_API_KEY` is enabled or OpenClaw Hunter POSTs from Mac Mini.
+#
+# Secrets:
+#   OUTBOUND_CRM_WEBHOOK_URL — https://<outbound-crm>.vercel.app/api/webhooks/hunter
+#   HUNTER_WEBHOOK_SECRET    — Production bearer secret (same as Vercel)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  push-fixtures:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: POST fixtures to Hunter webhook
+        env:
+          OUTBOUND_CRM_WEBHOOK_URL: ${{ secrets.OUTBOUND_CRM_WEBHOOK_URL }}
+          HUNTER_WEBHOOK_SECRET: ${{ secrets.HUNTER_WEBHOOK_SECRET }}
+        run: node apps/outbound-crm/scripts/post-test-leads.mjs

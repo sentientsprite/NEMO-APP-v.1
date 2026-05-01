@@ -1,64 +1,77 @@
-# Hunter → Outbound CRM (daily leads)
+# Hunter → Outbound CRM
 
-You want **up to 10 new prospects per day** landing in the CRM queue via `POST /api/webhooks/hunter`.
-
-Two supported setups:
+Leads land via `POST /api/webhooks/hunter`. **Google Places is optional** — skip it until you want GCP billing.
 
 ---
 
-## A) Cloud schedule — GitHub Actions + Google Places (this repo)
+## Recommended now — **no Google Places / no billing**
+
+Use committed fixtures (10 fictional **`555`** test businesses) + **two GitHub secrets**:
+
+| Secret | Value |
+|--------|--------|
+| `OUTBOUND_CRM_WEBHOOK_URL` | `https://<your-outbound-crm>.vercel.app/api/webhooks/hunter` |
+| `HUNTER_WEBHOOK_SECRET` | Same **Production** value as Vercel `HUNTER_WEBHOOK_SECRET` |
+
+Workflow: **[`.github/workflows/outbound-crm-fixture-webhook.yml`](../../../.github/workflows/outbound-crm-fixture-webhook.yml)** — **Actions → Run workflow** (manual). Data file: **`apps/outbound-crm/scripts/fixtures/test-leads.json`**.
+
+Locally (same secrets):
+
+```bash
+cd apps/outbound-crm
+export OUTBOUND_CRM_WEBHOOK_URL="https://….vercel.app/api/webhooks/hunter"
+export HUNTER_WEBHOOK_SECRET="…"
+npm run seed:test-leads
+```
+
+### Deploy / migrate the **outbound-crm** Vercel project (second app)
+
+Until this URL exists, GitHub has nowhere to POST.
+
+1. **Vercel → Add Project →** import **`sentientsprite/NEMO-APP-v.1`**, **Root Directory** **`apps/outbound-crm`** (not repo root).
+2. **Environment Variables → Production** — paste the **same Supabase** triple as before if you keep one DB (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`), plus **`HUNTER_WEBHOOK_SECRET`** (generate with `openssl rand -hex 32`; store it in GitHub too).
+3. **Deploy**. Smoke-test `GET /` or `/login` — should not be the customer-facing site.
+4. Copy **Production deployment URL** into **`OUTBOUND_CRM_WEBHOOK_URL`** secret (full `/api/webhooks/hunter` path).
+
+If **`nemo-app-v-1`** was mistakenly wired to **`apps/outbound-crm`**, switch that project to **`nemo-saas`** (customer site) or leave CRM-only on **`outbound-crm-*`** — see trunk **README** § customer vs internal.
+
+---
+
+## Later — GitHub Actions + **Google Places** (needs GCP billing)
 
 Workflow: **[`.github/workflows/hunter-daily-outbound-crm.yml`](../../../.github/workflows/hunter-daily-outbound-crm.yml)**  
-Script: **[`scripts/hunter-daily-crm-sync.mjs`](../../../scripts/hunter-daily-crm-sync.mjs)** — Maps-style discovery, then **Golden Triangle–style ranking** (rating, review volume, website, Beacon/Echo-style boosts) before POSTing. Tunable env vars on the runner: **`MIN_USER_RATINGS_TOTAL`** (default 12), **`MIN_RATING`** (default 3.7), **`POOL_MULTIPLIER`** (default 5), **`MAX_LEADS`**.  
-Queries: **[`scripts/hunter-search-queries.json`](../../../scripts/hunter-search-queries.json)**
+Script: **`scripts/hunter-daily-crm-sync.mjs`** — Maps-style discovery + ranking. Requires **`GOOGLE_PLACES_API_KEY`** plus the two webhook secrets above.
 
-### OpenClaw Hunter vs this script
+Queries: **`scripts/hunter-search-queries.json`**. Tunable: **`MIN_USER_RATINGS_TOTAL`**, **`MIN_RATING`**, **`POOL_MULTIPLIER`**, **`MAX_LEADS`**.
 
-The **OpenClaw gateway** is on GitHub (`sentientsprite/openclaw`), but **Hunter’s prompts, cron, and Maps/PinchTab workflows** usually live under **`~/.openclaw/`** on your Mac Mini (not in git). This Action mirrors **BUSINESS_PLAN.md** Hunter outcomes until the Mini POSTs the same webhook payloads.
+### OpenClaw Hunter vs Places script
 
-**Optional:** snapshot configs from the Mini for review (not executed in CI):
+The **OpenClaw gateway** is on GitHub (`sentientsprite/openclaw`), but Hunter’s **Maps/PinchTab** workflows usually live under **`~/.openclaw/`** on your Mac Mini. This Places script mirrors **BUSINESS_PLAN.md** until the Mini POSTs webhooks directly.
+
+**Optional snapshot from Mini:**
 
 ```bash
 rsync -az --exclude '**/secrets/**' user@mini:~/.openclaw/workspace/ ./openclaw-workspace-snapshot/
 ```
 
-**Repository secrets** (Settings → Secrets and variables → Actions):
+Default cron: **14:15 UTC daily** — edit the workflow to pause until Places billing is on.
 
-| Secret | Value |
-|--------|--------|
-| `GOOGLE_PLACES_API_KEY` | Google Cloud API key with **Places API** enabled (billing on). |
-| `OUTBOUND_CRM_WEBHOOK_URL` | Full URL: `https://<your-outbound-crm>.vercel.app/api/webhooks/hunter` |
-| `HUNTER_WEBHOOK_SECRET` | Exact **Production** `HUNTER_WEBHOOK_SECRET` from Vercel (same string the webhook checks). |
-
-Default cron: **14:15 UTC daily** — change the `cron` line in the workflow if you want a different local time.
-
-**Manual test:** Actions → **Hunter daily → Outbound CRM** → **Run workflow** (optional `max_leads`).
-
-Leads use **`external_id`** `google_place:<place_id>` so the same business **upserts** instead of duplicating on reruns.
+Leads from Places use **`external_id`** `google_place:<place_id>` and **`source`** `hunter_openclaw_aligned_daily`.
 
 ---
 
-## B) Real OpenClaw Hunter (Mac Mini / `openclaw` runtime)
+## OpenClaw Hunter only (Mac Mini)
 
-When Hunter already maps prospects and scores them:
+1. Schedule Hunter (launchd / cron / Paperclip).
+2. **POST** each lead (cap per day in agent logic) to `OUTBOUND_CRM_WEBHOOK_URL` with **`Authorization: Bearer HUNTER_WEBHOOK_SECRET`**.
+3. Disable duplicate automation (Places cron and/or fixture workflow) if needed.
 
-1. On a **daily** schedule (launchd, cron, or Paperclip), run Hunter’s prospecting flow.
-2. For **each** lead (cap **10/day** in your agent logic), `POST` JSON to the same webhook:
-
-   `POST {{OUTBOUND_CRM_WEBHOOK_URL}}`  
-   `Authorization: Bearer {{HUNTER_WEBHOOK_SECRET}}`  
-   `Content-Type: application/json`
-
-   Body fields: **`name`**, **`phone`**, **`source`**, optional **`company`**, **`email`**, **`notes`**, **`external_id`** (stable id from Hunter/OpenClaw run — required for safe dedupe).
-
-3. Disable or pause the **GitHub Actions** workflow if it would double-fetch the same verticals.
-
-Webhook semantics and examples: **`README.md`** in this app (Hunter webhook section).
+Webhook fields: **`README.md`** (Hunter webhook section).
 
 ---
 
 ## Operational checks
 
-- CRM queue defaults to **`status=new`** — new webhook rows appear there after sync. Filter **Source** contains `hunter_openclaw_aligned_daily` to see only this job.
-- **`503` / `401`** from webhook → Vercel env or bearer secret mismatch.
-- Places script exits **1** if zero leads posted — often **`MIN_USER_RATINGS_TOTAL` / `MIN_RATING` too strict** for your market; lower them in the workflow `env` block for testing.
+- Queue **`status=new`** shows new rows. Fixture seeds use **`source`** like `hunter_monday` / `hunter_csv_import`; Places runs use **`hunter_openclaw_aligned_daily`**.
+- **`503` / `401`** → wrong Vercel env or bearer secret.
+- **`Missing GOOGLE_PLACES_API_KEY`** on **Hunter daily** workflow → expected until billing; use **fixture** workflow instead.

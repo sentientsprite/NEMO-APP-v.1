@@ -124,7 +124,7 @@ Use the Hunter webhook so you exercise **production** the same way OpenClaw/Hunt
 2. From **`apps/outbound-crm`**:
 
 ```bash
-export WEBHOOK_URL="https://YOUR-OUTBOUND-CRM.vercel.app/api/webhooks/hunter"
+export OUTBOUND_CRM_WEBHOOK_URL="https://YOUR-OUTBOUND-CRM.vercel.app/api/webhooks/hunter"
 export HUNTER_WEBHOOK_SECRET="paste-production-secret-here"
 
 npm run seed:test-leads
@@ -136,7 +136,7 @@ Optional: `npm run seed:test-leads -- ./path/to/other.json` (path relative to cu
 
 Then sign in → **`/queue`** — default filter **new** should list them (raise **Limit** to 25 if needed).
 
-Full webhook contract + dedupe rules: **`README.md`** (this folder). **Daily automation** (GitHub cron + Google Places, or real OpenClaw Hunter): **`docs/HUNTER_SCHEDULE.md`**.
+Full webhook contract + dedupe rules: **`README.md`** (this folder). **Daily automation:** **`docs/HUNTER_SCHEDULE.md`** — **no Google billing** path uses fixture workflow + two secrets; Places optional later.
 
 ## Deploy (Vercel)
 

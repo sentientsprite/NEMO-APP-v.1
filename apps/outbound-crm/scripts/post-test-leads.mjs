@@ -4,7 +4,7 @@
  * Tests the full path: Vercel/Lambda → Supabase service role → outbound_leads.
  *
  * Usage (from apps/outbound-crm):
- *   WEBHOOK_URL=https://<your-outbound-crm>.vercel.app/api/webhooks/hunter \
+ *   OUTBOUND_CRM_WEBHOOK_URL=https://<your-outbound-crm>.vercel.app/api/webhooks/hunter \
  *   HUNTER_WEBHOOK_SECRET=<same as Vercel> \
  *   npm run seed:test-leads
  *
@@ -17,14 +17,22 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-const webhookUrl = process.env.WEBHOOK_URL?.trim().replace(/\/+$/, "");
+const webhookUrl = (
+  process.env.WEBHOOK_URL ||
+  process.env.OUTBOUND_CRM_WEBHOOK_URL ||
+  ""
+)
+  .trim()
+  .replace(/\/+$/, "");
 const secret = process.env.HUNTER_WEBHOOK_SECRET?.trim();
 
 const arg = process.argv[2];
 const fixturePath = arg ? resolve(process.cwd(), arg) : join(__dirname, "fixtures", "test-leads.json");
 
 if (!webhookUrl) {
-  console.error("Missing WEBHOOK_URL (e.g. https://….vercel.app/api/webhooks/hunter)");
+  console.error(
+    "Missing WEBHOOK_URL or OUTBOUND_CRM_WEBHOOK_URL (e.g. https://….vercel.app/api/webhooks/hunter)",
+  );
   process.exit(1);
 }
 if (!secret) {
