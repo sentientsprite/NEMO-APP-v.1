@@ -91,7 +91,7 @@ Keep **two Vercel projects** so customer traffic and internal tooling never shar
 
 | Vercel project | Audience | Purpose |
 |----------------|----------|---------|
-| **`nemo-app-v-1`** | **Customers** — products we sell | Marketing surfaces, signup flows, customer dashboards, anything buyer-facing. Source today: **`autoagent`** repo → **`nemo-saas/`** (deploy with Vercel root directory **`nemo-saas`**). |
+| **`nemo-app-v-1`** | **Customers** — products we sell | Marketing site + **`/portal`** (buyer tools); staff bookmarks **`/team`** (`noindex`). Source: **`autoagent`** → **`nemo-saas/`** (Vercel root **`nemo-saas`**). Matrix: **`autoagent/nemo-saas/docs/ACCESS_AND_PORTALS.md`**. |
 | **`outbound-crm`** | **Internal** — lead hunting / closer CRM | Rep queue, Hunter webhook, Supabase Auth for staff only. Code: **`apps/outbound-crm/`**. |
 
 **Rules of thumb:** Import **`apps/outbound-crm`** only on **`outbound-crm`**. Do not repurpose **`nemo-app-v-1`** for the Hunter webhook or rep login. Each project carries its **own** env vars and deployments.
