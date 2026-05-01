@@ -136,6 +136,8 @@ Optional: `npm run seed:test-leads -- ./path/to/other.json` (path relative to cu
 
 Then sign in → **`/queue`** — default filter **new** should list them (raise **Limit** to 25 if needed).
 
+Full webhook contract + dedupe rules: **`README.md`** (this folder). **Daily automation** (GitHub cron + Google Places, or real OpenClaw Hunter): **`docs/HUNTER_SCHEDULE.md`**.
+
 ## Deploy (Vercel)
 
 1. Create or select project **`outbound-crm`** (separate from **`nemo-app-v-1`**). Import this repo; set **Root Directory** to `apps/outbound-crm`.
