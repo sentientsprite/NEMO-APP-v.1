@@ -47,6 +47,20 @@ Quick recap:
 | `SUPABASE_SERVICE_ROLE_KEY` | Server only | Webhook inserts; never commit |
 | `HUNTER_WEBHOOK_SECRET` | Server only | `Authorization: Bearer …` on webhook |
 
+Optional — **Run Hunter now** on `/queue` (authenticated rep only; secrets never exposed to the browser):
+
+| Variable | Where | Purpose |
+|----------|-------|---------|
+| `HUNTER_DISPATCH_WEBHOOK_URL` | Server only | POST target (Make/n8n/etc.) that starts your Hunter / GitHub / OpenClaw pipeline |
+| `HUNTER_DISPATCH_WEBHOOK_SECRET` | Server only | Optional Bearer sent with that POST |
+| `HUNTER_GITHUB_DISPATCH_TOKEN` | Server only | GitHub PAT to call `workflow_dispatch` on the fixture workflow (if you skip Make) |
+| `HUNTER_GITHUB_REPO_OWNER` | Server only | Default `sentientsprite` |
+| `HUNTER_GITHUB_REPO` | Server only | Default `NEMO-APP-v.1` |
+| `HUNTER_GITHUB_WORKFLOW_FILE` | Server only | Default `outbound-crm-fixture-webhook.yml` |
+| `HUNTER_GITHUB_WORKFLOW_REF` | Server only | Default `main` |
+
+If **`HUNTER_DISPATCH_WEBHOOK_URL`** is set, it takes precedence over the GitHub token. Ensure GitHub **repository secret** `OUTBOUND_CRM_WEBHOOK_URL` matches wherever **`/api/webhooks/hunter`** is deployed (e.g. `https://nemo-app-v-1.vercel.app/api/webhooks/hunter` if you use that project for the CRM).
+
 ## Vercel
 
 Use the **internal** Vercel project (**`outbound-crm`** — e.g. `outbound-crm-*.vercel.app`), **not** **`nemo-app-v-1`** (that URL is for customer-facing products). Root directory for this repo: **`apps/outbound-crm`**.
@@ -59,6 +73,10 @@ Add **Settings → Environment Variables** on that project:
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Same |
 | `SUPABASE_SERVICE_ROLE_KEY` | Same — server-only, never expose to client |
 | `HUNTER_WEBHOOK_SECRET` | Same |
+| `HUNTER_DISPATCH_WEBHOOK_URL` | Same — optional; **Run Hunter now** button |
+| `HUNTER_DISPATCH_WEBHOOK_SECRET` | Same — optional Bearer for that URL |
+| `HUNTER_GITHUB_DISPATCH_TOKEN` | Same — optional; direct GitHub `workflow_dispatch` |
+| `HUNTER_GITHUB_*` | Same — optional overrides for repo / workflow file / ref |
 
 Then trigger a **new deployment**.  
 

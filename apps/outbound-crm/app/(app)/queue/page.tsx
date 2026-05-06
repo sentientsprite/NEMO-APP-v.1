@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { RunHunterWorkflowButton } from "@/components/RunHunterWorkflowButton";
 import { createClient } from "@/lib/supabase/server";
 import type { OutboundLead } from "@/lib/types";
 import { isLeadStatus, LEAD_STATUSES } from "@/lib/types";
@@ -56,6 +57,8 @@ export default async function QueuePage({ searchParams }: PageProps) {
           other stages or sources.
         </p>
       </div>
+
+      <RunHunterWorkflowButton />
 
       <form className="grid gap-3 rounded-xl border border-slate-200 bg-white p-4 sm:grid-cols-2" method="get">
         <label className="text-sm">
