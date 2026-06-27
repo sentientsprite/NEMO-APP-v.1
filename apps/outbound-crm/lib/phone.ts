@@ -4,6 +4,7 @@
  */
 export function normalizePhone(input: string): string {
   const raw = input.trim();
+  if (raw.startsWith("lvs:")) return raw;
   const digits = raw.replace(/\D/g, "");
   if (digits.length === 10) return `+1${digits}`;
   if (digits.length === 11 && digits.startsWith("1")) return `+${digits}`;
@@ -12,7 +13,12 @@ export function normalizePhone(input: string): string {
   return "";
 }
 
+export function isEmailOnlyLead(phoneNormalized: string): boolean {
+  return phoneNormalized.startsWith("lvs:");
+}
+
 export function telHref(phoneNormalized: string): string {
+  if (isEmailOnlyLead(phoneNormalized)) return "#";
   const n = phoneNormalized.replace(/\D/g, "");
   return n ? `tel:${phoneNormalized}` : "#";
 }

@@ -102,7 +102,7 @@ Until URL + anon are present, **`/`** renders an in-app setup notice instead of 
 }
 ```
 
-- **Required:** `name`, `phone`, `source`.
+- **Required:** `name`, `phone`, `source` — **except** `source=lvs_wedge` with `external_id` + `email` (email-only wedge leads from `nemo-app-v-1`; phone omitted).
 - **Optional:** `company`, `email`, `notes`, `external_id`.
 
 ### Dedupe rules

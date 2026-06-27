@@ -54,20 +54,36 @@ export async function POST(request: Request) {
   }
 
   const name = typeof body.name === "string" ? body.name.trim() : "";
-  const phone = typeof body.phone === "string" ? body.phone.trim() : "";
+  const phoneRaw = typeof body.phone === "string" ? body.phone.trim() : "";
   const source = typeof body.source === "string" ? body.source.trim() : "";
   const company = typeof body.company === "string" ? body.company.trim() : undefined;
   const email = typeof body.email === "string" ? body.email.trim() : undefined;
   const notes = typeof body.notes === "string" ? body.notes.trim() : undefined;
   const external_id = typeof body.external_id === "string" ? body.external_id.trim() : undefined;
 
-  if (!name || !phone || !source) {
-    return NextResponse.json({ error: "invalid_input", detail: "name, phone, and source are required" }, { status: 400 });
+  const isLvsWedge = source === "lvs_wedge";
+
+  if (!name || !source) {
+    return NextResponse.json({ error: "invalid_input", detail: "name and source are required" }, { status: 400 });
   }
 
-  const phone_normalized = normalizePhone(phone);
-  if (!phone_normalized) {
-    return NextResponse.json({ error: "invalid_phone" }, { status: 400 });
+  if (!phoneRaw && !(isLvsWedge && external_id && email)) {
+    return NextResponse.json(
+      { error: "invalid_input", detail: "phone is required (or lvs_wedge with external_id + email)" },
+      { status: 400 },
+    );
+  }
+
+  let phone = phoneRaw;
+  let phone_normalized: string;
+  if (isLvsWedge && !phoneRaw && external_id) {
+    phone = "(email lead)";
+    phone_normalized = external_id.startsWith("lvs:") ? external_id : `lvs:${external_id}`;
+  } else {
+    phone_normalized = normalizePhone(phoneRaw);
+    if (!phone_normalized) {
+      return NextResponse.json({ error: "invalid_phone" }, { status: 400 });
+    }
   }
 
   const admin = createAdminClient();

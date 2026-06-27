@@ -9,7 +9,7 @@ import {
 import { createClient } from "@/lib/supabase/server";
 import type { OutboundActivity, OutboundLead } from "@/lib/types";
 import { LEAD_STATUSES } from "@/lib/types";
-import { telHref } from "@/lib/phone";
+import { telHref, isEmailOnlyLead } from "@/lib/phone";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -37,6 +37,8 @@ export default async function LeadDetailPage({ params }: PageProps) {
     ? `mailto:${encodeURIComponent(row.email)}?subject=${encodeURIComponent(`Prana — ${row.name}`)}`
     : null;
 
+  const emailOnly = isEmailOnlyLead(row.phone_normalized);
+
   return (
     <div className="space-y-6">
       <p className="text-sm">
@@ -58,12 +60,16 @@ export default async function LeadDetailPage({ params }: PageProps) {
             {row.notes ? <p className="mt-3 whitespace-pre-wrap text-sm text-slate-700">{row.notes}</p> : null}
           </div>
           <div className="flex flex-col gap-2 sm:items-end">
-            <a
-              href={telHref(row.phone_normalized)}
-              className="inline-flex min-h-[48px] min-w-[48px] items-center justify-center rounded-xl bg-emerald-600 px-6 py-3 text-center text-base font-bold text-white"
-            >
-              Call now
-            </a>
+            {emailOnly ? (
+              <p className="rounded-xl bg-violet-50 px-4 py-2 text-sm font-semibold text-violet-800">Email-first LVS lead</p>
+            ) : (
+              <a
+                href={telHref(row.phone_normalized)}
+                className="inline-flex min-h-[48px] min-w-[48px] items-center justify-center rounded-xl bg-emerald-600 px-6 py-3 text-center text-base font-bold text-white"
+              >
+                Call now
+              </a>
+            )}
             {mailto ? (
               <a
                 href={mailto}
