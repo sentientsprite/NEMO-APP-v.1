@@ -156,8 +156,14 @@ Each skill = (1) input schema, (2) tool allowlist, (3) deterministic-vs-LLM spli
 **Phase 2 — Recurring SaaS MVP (3–5 weeks)**
 - Add Supabase auth + Stripe + a workflow engine (Inngest is the lowest-friction).
 - Implement `gsc_opportunity_finder` and `ga4_health_brief` behind Google OAuth.
-- Tenant model: org → sites → connectors → scheduled jobs.
-- Per-tenant playbook stored as the nemo-workspace markdown bundle in object storage; passed into LLM context for narrative skills.
+- Tenant model: org → sites → connectors → scheduled jobs → client intelligence.
+- Add per-site `CLIENT.md` as the canonical intelligence file: generated at
+  onboarding, read before every agent/skill run, updated after meaningful
+  actions. Store current markdown plus append-only intelligence events.
+- Add a Monday `weekly_client_brief`: two paragraphs max, plain English,
+  grounded in `CLIENT.md` + recent jobs. This replaces chart-heavy "reports" as
+  the primary retention loop.
+- Per-tenant playbook stored as the nemo-workspace markdown bundle in object storage; passed into LLM context for narrative skills alongside `CLIENT.md`.
 
 **Phase 3 — Chrome extension reborn**
 - Take `DGTL-MKTG-ASST-main` and rewire it to authenticate against the SaaS backend (not Google directly), so the extension is a thin client that calls server skills.
