@@ -42,10 +42,21 @@ scripts/
 - **Audit log** — Every workflow action recorded
 - **Demo + live modes** — Full factory flow without API keys, or Vercel AI Gateway when configured
 
+## Storage
+
+The memory index and workflow state use a pluggable `KvStore`:
+
+- **file** (default locally) — writes to `.nemo-workspace/` on disk; ideal for
+  desktop/local use.
+- **blob** (default on Vercel) — uses Vercel Blob so state persists on the
+  read-only serverless filesystem. Auto-selected when `BLOB_READ_WRITE_TOKEN`
+  is present or when running on Vercel.
+
 ## Environment
 
 ```bash
 # apps/workspace/.env.local
+NEMO_STORAGE=file
 NEMO_WORKSPACE_ROOT=/path/to/.nemo-workspace
 
 # Optional live generation

@@ -13,6 +13,7 @@
     "@nemo/agents": "workspace:*",
     "@nemo/memory": "workspace:*",
     "@nemo/orchestrator": "workspace:*",
+    "@vercel/blob": "^2.5.0",
     "ai": "^7.0.4",
     "next": "^15.1.0",
     "react": "^19.0.0",
