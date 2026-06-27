@@ -15,7 +15,7 @@ export class BlobKvStore implements KvStore {
 
   async getText(key: string): Promise<string | null> {
     try {
-      const res = await get(key, { access: "public", ...this.common() });
+      const res = await get(key, { access: "private", ...this.common() });
       if (!res || !res.stream) return null;
       return await new Response(res.stream as ReadableStream).text();
     } catch {
@@ -25,7 +25,7 @@ export class BlobKvStore implements KvStore {
 
   async putText(key: string, value: string): Promise<void> {
     await put(key, value, {
-      access: "public",
+      access: "private",
       addRandomSuffix: false,
       allowOverwrite: true,
       ...this.common(),
