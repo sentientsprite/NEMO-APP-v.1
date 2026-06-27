@@ -6,3 +6,11 @@ apps/outbound-crm/.env
 apps/outbound-crm/.env.local
 apps/outbound-crm/.vercel
 apps/outbound-crm/tsconfig.tsbuildinfo
+apps/workspace/node_modules/
+apps/workspace/.next/
+apps/workspace/.env.local
+apps/workspace/tsconfig.tsbuildinfo
+apps/workspace/next-env.d.ts
+.nemo-workspace/
+node_modules/
+.vercel
