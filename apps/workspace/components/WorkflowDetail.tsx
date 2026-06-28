@@ -24,24 +24,53 @@ interface WorkflowDetailProps {
   stages: StageOutput[];
 }
 
+const STAGE_LABELS: Record<string, string> = {
+  researcher: "research findings",
+  story_writer: "user story",
+  spec_writer: "technical brief",
+  builder: "build output",
+  validator: "validation report",
+};
+
 export function WorkflowDetail(props: WorkflowDetailProps) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   async function runAction(action: "approve" | "reject" | "run") {
     setLoading(true);
-    await fetch(`/api/workflows/${props.id}/action`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action }),
-    });
-    setLoading(false);
-    router.refresh();
+    setError(null);
+    try {
+      const res = await fetch(`/api/workflows/${props.id}/action`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action }),
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => null)) as
+          | { error?: string }
+          | null;
+        throw new Error(body?.error || `Request failed (${res.status})`);
+      }
+      router.refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Action failed");
+    } finally {
+      setLoading(false);
+    }
   }
 
   const paywallStage = props.stages.find(
     (s) => s.output?.structured?.provider === "paywall_blocked",
   );
+
+  const awaitingStage = props.stages.find((s) => s.status === "awaiting_approval");
+  const gateLabel = awaitingStage
+    ? STAGE_LABELS[awaitingStage.role] ?? awaitingStage.role.replace(/_/g, " ")
+    : null;
+  const remainingGates = props.stages.filter(
+    (s) => s.status === "awaiting_approval" || s.status === "pending",
+  ).length;
 
   return (
     <div className="space-y-8">
@@ -77,22 +106,32 @@ export function WorkflowDetail(props: WorkflowDetailProps) {
 
       {props.status === "awaiting_approval" && (
         <div className="rounded-lg border border-nemo-warning bg-[#21262d] p-4">
-          <p className="font-medium text-nemo-warning">Needs your approval</p>
+          <p className="font-medium text-nemo-warning">
+            Checkpoint{gateLabel ? `: approve the ${gateLabel}` : ": needs your approval"}
+          </p>
           <p className="mt-1 text-sm text-nemo-muted">
             Review the latest output below. Approve to continue or reject to stop.
+            {remainingGates > 1
+              ? " This workflow has more than one checkpoint, so you may be asked to approve again at the next stage."
+              : ""}
           </p>
-          <div className="mt-4 flex gap-3">
+          {error && (
+            <p className="mt-3 rounded-md border border-nemo-danger bg-[#2d1418] px-3 py-2 text-sm text-nemo-danger">
+              {error}
+            </p>
+          )}
+          <div className="mt-4 flex items-center gap-3">
             <button
               disabled={loading}
               onClick={() => runAction("approve")}
-              className="rounded-lg bg-nemo-success px-4 py-2 text-sm font-medium text-[#0d1117]"
+              className="rounded-lg bg-nemo-success px-4 py-2 text-sm font-medium text-[#0d1117] disabled:opacity-60"
             >
-              Approve
+              {loading ? "Working…" : "Approve"}
             </button>
             <button
               disabled={loading}
               onClick={() => runAction("reject")}
-              className="rounded-lg border border-nemo-danger px-4 py-2 text-sm text-nemo-danger"
+              className="rounded-lg border border-nemo-danger px-4 py-2 text-sm text-nemo-danger disabled:opacity-60"
             >
               Reject
             </button>
