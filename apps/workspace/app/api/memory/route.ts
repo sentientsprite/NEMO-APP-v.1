@@ -1,64 +1,51 @@
 import { NextResponse } from "next/server";
 
+import { jsonError, parseJsonBody, parseSearchParams } from "@/lib/api/errors";
+import { createMemoryBodySchema, memorySearchQuerySchema } from "@/lib/api/schemas";
 import { importUrl } from "@/lib/ingest/url";
 import { getMemoryStore } from "@/lib/store";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const q = searchParams.get("q") ?? "";
+  const parsed = parseSearchParams(searchParams, memorySearchQuerySchema);
+  if ("error" in parsed) return parsed.error;
 
   const store = getMemoryStore();
   await store.ensureReady();
-  const results = await store.search(q, 10);
+  const results = await store.search(parsed.data.q, 10);
   const docs = await store.loadIndex();
 
-  return NextResponse.json({ query: q, results, total: docs.length });
+  return NextResponse.json({ query: parsed.data.q, results, total: docs.length });
 }
 
 export async function POST(request: Request) {
-  const body = await request.json();
-  const rawTitle = String(body.title ?? "").trim();
-  const content = String(body.content ?? "").trim();
-  const sourceType = String(body.sourceType ?? "note") as "note" | "csv" | "url";
-  const sourceUrl = String(body.sourceUrl ?? "").trim();
+  const parsed = await parseJsonBody(request, createMemoryBodySchema);
+  if ("error" in parsed) return parsed.error;
 
-  if (!["note", "csv", "url"].includes(sourceType)) {
-    return NextResponse.json({ error: "Invalid source type" }, { status: 400 });
-  }
-
-  if (sourceType !== "url" && !content) {
-    return NextResponse.json({ error: "Content required" }, { status: 400 });
-  }
-
+  const { title: rawTitle, content, sourceType, sourceUrl } = parsed.data;
   const store = getMemoryStore();
   await store.ensureReady();
 
   try {
-    if (sourceType === "url") {
-      if (!sourceUrl) {
-        return NextResponse.json({ error: "URL required" }, { status: 400 });
-      }
+    if (sourceType === "url" && sourceUrl) {
       const imported = await importUrl(sourceUrl);
       const doc = await store.addDocument({
         title: rawTitle || imported.title,
         content: imported.content,
         sourceType: "url",
-        sourceUrl,
+        sourceUrl: imported.url,
       });
-      return NextResponse.json({ document: doc });
+      return NextResponse.json({ document: doc, import: { fetchedAt: imported.fetchedAt } });
     }
 
     const doc = await store.addDocument({
       title: rawTitle || "Note",
-      content,
+      content: content ?? "",
       sourceType,
     });
 
     return NextResponse.json({ document: doc });
   } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Import failed" },
-      { status: 400 },
-    );
+    return jsonError(error instanceof Error ? error.message : "Import failed", 400);
   }
 }

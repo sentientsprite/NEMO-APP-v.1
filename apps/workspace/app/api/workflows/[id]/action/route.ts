@@ -2,13 +2,18 @@ import { NextResponse } from "next/server";
 
 import {
   approveStageWithRunner,
+  finalizeStageApproval,
   rejectStage,
   runCurrentStageWithRunner,
   summarizeWorkflow,
 } from "@nemo/orchestrator";
 
+import { jsonError, parseJsonBody } from "@/lib/api/errors";
+import { workflowActionBodySchema } from "@/lib/api/schemas";
 import { runAgent } from "@/lib/ai/run-agent";
-import { getMemoryStore } from "@/lib/store";
+import { enqueueWorkflowJob } from "@/lib/db/jobs-postgres";
+import { triggerJobProcessor } from "@/lib/jobs/process-workflow-job";
+import { usePostgresWorkflows } from "@/lib/supabase/admin";
 import { loadWorkflow, saveWorkflow } from "@/lib/workflows";
 
 export async function POST(
@@ -18,37 +23,48 @@ export async function POST(
   const { id } = await context.params;
   const workflow = await loadWorkflow(id);
   if (!workflow) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
+    return jsonError("Not found", 404);
   }
 
-  const body = await request.json().catch(() => ({}));
-  const action = body.action as string;
+  const parsed = await parseJsonBody(request, workflowActionBodySchema);
+  if ("error" in parsed) return parsed.error;
 
-  const store = getMemoryStore();
+  const { action, reason } = parsed.data;
+  const queued = usePostgresWorkflows();
   let updated = workflow;
 
   try {
     if (action === "approve") {
-      updated = await approveStageWithRunner(workflow, runAgent);
+      updated = queued
+        ? finalizeStageApproval(workflow)
+        : await approveStageWithRunner(workflow, runAgent);
     } else if (action === "reject") {
-      updated = rejectStage(workflow, body.reason);
+      updated = rejectStage(workflow, reason);
     } else if (action === "run") {
-      const memoryContext = await store.getContextForPrompt(workflow.userPrompt);
-      updated = await runCurrentStageWithRunner(workflow, runAgent, memoryContext);
-    } else {
-      return NextResponse.json({ error: "Unknown action" }, { status: 400 });
+      if (queued) {
+        await enqueueWorkflowJob(workflow.id);
+        triggerJobProcessor();
+        updated = (await loadWorkflow(workflow.id)) ?? workflow;
+      } else {
+        updated = await runCurrentStageWithRunner(workflow, runAgent);
+      }
     }
   } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Action failed" },
-      { status: 400 },
-    );
+    return jsonError(err instanceof Error ? err.message : "Action failed", 400);
   }
 
-  await saveWorkflow(updated);
+  if (!(queued && action === "run")) {
+    await saveWorkflow(updated);
+  }
+
+  if (queued && action === "approve" && updated.status !== "completed") {
+    await enqueueWorkflowJob(updated.id);
+    triggerJobProcessor();
+  }
 
   return NextResponse.json({
     summary: summarizeWorkflow(updated),
     workflow: updated,
+    queued: queued && (action === "approve" || action === "run"),
   });
 }

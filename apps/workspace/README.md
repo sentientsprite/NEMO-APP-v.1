@@ -64,6 +64,23 @@ Three Vercel projects (or env configs) map to product tiers:
 
 See `/pricing` in the app for details. Each tier uses the same codebase; only env vars differ.
 
+## Postgres + job queue
+
+When `SUPABASE_SERVICE_ROLE_KEY` is set, workflows, audit log, plans, and the job queue use Supabase Postgres. Memory/documents stay on Blob or local file storage.
+
+1. Apply migration: `apps/workspace/supabase/migrations/20260628000000_nemo_workspace_core.sql`
+2. Set env vars (see `.env.example`)
+3. Set `CRON_SECRET` and optionally enable Vercel cron (`vercel.json`)
+
+Workflow stages run **one per job** via `POST /api/jobs/process` (Bearer `CRON_SECRET`), avoiding serverless timeouts.
+
+Run URL research regression evals:
+
+```bash
+pnpm --filter @nemo/workspace eval:url-research
+NEMO_EVAL_LIVE_FETCH=1 pnpm --filter @nemo/workspace eval:url-research
+```
+
 ## Environment
 
 ```bash

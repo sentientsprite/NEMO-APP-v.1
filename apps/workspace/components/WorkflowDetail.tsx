@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { ProviderBadge, StagePills, StatusBadge } from "./Shell";
+import { SafeMarkdown } from "./SafeMarkdown";
 
 interface StageOutput {
   role: string;
@@ -112,9 +113,7 @@ export function WorkflowDetail(props: WorkflowDetailProps) {
                 <StatusBadge status={stage.status} />
               </div>
             </div>
-            {stage.output?.markdown && (
-              <pre className="whitespace-pre-wrap text-sm text-nemo-muted">{stage.output.markdown}</pre>
-            )}
+            {stage.output?.markdown && <SafeMarkdown content={stage.output.markdown} />}
           </section>
         ))}
       </div>

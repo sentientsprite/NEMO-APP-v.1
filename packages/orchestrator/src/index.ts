@@ -43,6 +43,8 @@ export interface WorkflowRecord {
    * approval — sees the same source material.
    */
   sourceContext?: string;
+  /** Memory search snapshot at workflow creation. */
+  memoryContext?: string;
 }
 
 export interface AuditEntry {
@@ -56,6 +58,7 @@ export function createWorkflow(
   title: string,
   userPrompt: string,
   sourceContext?: string,
+  memoryContext?: string,
 ): WorkflowRecord {
   const template = WORKFLOW_TEMPLATES[templateId];
   const now = new Date().toISOString();
@@ -75,15 +78,25 @@ export function createWorkflow(
     updatedAt: now,
     auditLog: [{ at: now, action: "workflow_created", detail: templateId }],
     sourceContext: sourceContext?.trim() || undefined,
+    memoryContext: memoryContext?.trim() || undefined,
   };
 }
 
-/** Combines persisted source context with any per-call memory context. */
+/** Merges persisted workflow context for agent stages. */
+export function workflowContext(workflow: WorkflowRecord): string | undefined {
+  const merged = [workflow.sourceContext, workflow.memoryContext]
+    .map((part) => part?.trim())
+    .filter(Boolean)
+    .join("\n\n");
+  return merged || undefined;
+}
+
+/** @deprecated use workflowContext */
 function combinedContext(
   workflow: WorkflowRecord,
   memoryContext?: string,
 ): string | undefined {
-  const merged = [workflow.sourceContext, memoryContext]
+  const merged = [workflow.sourceContext, workflow.memoryContext, memoryContext]
     .map((part) => part?.trim())
     .filter(Boolean)
     .join("\n\n");
@@ -292,7 +305,7 @@ export async function runCurrentStageWithRunner(
     workflowTitle: workflow.title,
     userPrompt: workflow.userPrompt,
     priorOutputs: priorOutputs(workflow),
-    memoryContext: combinedContext(workflow, memoryContext),
+    memoryContext: workflowContext(workflow) ?? memoryContext,
   };
 
   const output = await runner(input);
@@ -321,6 +334,136 @@ export async function runCurrentStageWithRunner(
   }
 
   return advanceAfterStageWithRunner(updated, runner);
+}
+
+/** Runs exactly one agent stage — does not auto-advance (for job queue). */
+export async function runSingleStageWithRunner(
+  workflow: WorkflowRecord,
+  runner: AgentRunner,
+  memoryContext?: string,
+): Promise<WorkflowRecord> {
+  const template = WORKFLOW_TEMPLATES[workflow.templateId];
+  const idx = workflow.currentStageIndex;
+  const stage = workflow.stages[idx];
+  if (!stage || stage.status === "completed") return workflow;
+
+  const now = new Date().toISOString();
+  const updated: WorkflowRecord = {
+    ...workflow,
+    status: "running",
+    updatedAt: now,
+    auditLog: [
+      ...workflow.auditLog,
+      { at: now, action: "stage_started", detail: stage.role },
+    ],
+  };
+
+  updated.stages = workflow.stages.map((s, i) =>
+    i === idx ? { ...s, status: "running", startedAt: now } : s,
+  );
+
+  const input: AgentRunInput = {
+    role: stage.role,
+    workflowTitle: workflow.title,
+    userPrompt: workflow.userPrompt,
+    priorOutputs: priorOutputs(workflow),
+    memoryContext: workflowContext(workflow) ?? memoryContext,
+  };
+
+  const output = await runner(input);
+  const completedAt = new Date().toISOString();
+  const needsApproval = template.approvalGates.includes(stage.role);
+
+  updated.stages = updated.stages.map((s, i) =>
+    i === idx
+      ? {
+          ...s,
+          status: needsApproval ? "awaiting_approval" : "completed",
+          output,
+          completedAt,
+        }
+      : s,
+  );
+
+  if (needsApproval) {
+    updated.status = "awaiting_approval";
+    updated.auditLog.push({
+      at: completedAt,
+      action: "approval_required",
+      detail: stage.role,
+    });
+    return updated;
+  }
+
+  updated.status = "running";
+  return updated;
+}
+
+/** Move to the next stage index after a stage completes without approval. */
+export function advanceWorkflowStageIndex(workflow: WorkflowRecord): WorkflowRecord {
+  const nextIndex = workflow.currentStageIndex + 1;
+  const now = new Date().toISOString();
+
+  if (nextIndex >= workflow.stages.length) {
+    return {
+      ...workflow,
+      currentStageIndex: nextIndex - 1,
+      status: "completed",
+      updatedAt: now,
+      auditLog: [
+        ...workflow.auditLog,
+        { at: now, action: "workflow_completed" },
+      ],
+    };
+  }
+
+  return {
+    ...workflow,
+    currentStageIndex: nextIndex,
+    status: "running",
+    updatedAt: now,
+    auditLog: [
+      ...workflow.auditLog,
+      { at: now, action: "stage_advanced", detail: String(nextIndex) },
+    ],
+  };
+}
+
+/** True when another run_stage job should be enqueued after the current stage. */
+export function workflowNeedsNextStageJob(workflow: WorkflowRecord): boolean {
+  if (workflow.status === "awaiting_approval") return false;
+  if (workflow.status === "completed") return false;
+  if (workflow.status === "rejected" || workflow.status === "failed") return false;
+
+  const idx = workflow.currentStageIndex;
+  const stage = workflow.stages[idx];
+  if (!stage || stage.status !== "completed") return false;
+
+  return idx + 1 < workflow.stages.length;
+}
+
+/** Approve the current gate and advance index — does not run agents (queue handles that). */
+export function finalizeStageApproval(workflow: WorkflowRecord): WorkflowRecord {
+  const idx = workflow.currentStageIndex;
+  const stage = workflow.stages[idx];
+  if (!stage || stage.status !== "awaiting_approval") {
+    throw new Error("No stage awaiting approval");
+  }
+
+  const now = new Date().toISOString();
+  const approved: WorkflowRecord = {
+    ...workflow,
+    updatedAt: now,
+    auditLog: [
+      ...workflow.auditLog,
+      { at: now, action: "stage_approved", detail: stage.role },
+    ],
+    stages: workflow.stages.map((s, i) =>
+      i === idx ? { ...s, status: "completed" } : s,
+    ),
+  };
+
+  return advanceWorkflowStageIndex(approved);
 }
 
 async function advanceAfterStageWithRunner(

@@ -58,7 +58,6 @@ export function getPlan(): PlanInfo {
     return { tier: explicit, ...TIER_META[explicit] };
   }
 
-  // Legacy: NEMO_AI_MODE=live + NEMO_AI_STRICT=1 → production
   if (process.env.NEMO_AI_MODE === "live" && process.env.NEMO_AI_STRICT === "1") {
     return { tier: "production", ...TIER_META.production };
   }
@@ -67,6 +66,19 @@ export function getPlan(): PlanInfo {
   }
 
   return { tier: "demo", ...TIER_META.demo };
+}
+
+/** Prefer Postgres plan row when Supabase is configured. */
+export async function getPlanAsync(): Promise<PlanInfo> {
+  const tier = getPlan().tier;
+  try {
+    const { loadPlanFromPostgres } = await import("@/lib/db/plans-postgres");
+    const fromDb = await loadPlanFromPostgres(tier);
+    if (fromDb) return fromDb;
+  } catch {
+    // Fall back to env-defined plan metadata.
+  }
+  return getPlan();
 }
 
 export function planForClient(plan: PlanInfo) {

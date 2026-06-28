@@ -1,17 +1,17 @@
 import { NextResponse } from "next/server";
 
 import { WORKFLOW_TEMPLATES } from "@nemo/agents";
-import {
-  createWorkflow,
-  runCurrentStageWithRunner,
-  summarizeWorkflow,
-} from "@nemo/orchestrator";
-import type { WorkflowTemplateId } from "@nemo/agents";
+import { createWorkflow, runCurrentStageWithRunner, summarizeWorkflow } from "@nemo/orchestrator";
 
+import { parseJsonBody } from "@/lib/api/errors";
+import { createWorkflowBodySchema } from "@/lib/api/schemas";
 import { runAgent } from "@/lib/ai/run-agent";
+import { enqueueWorkflowJob } from "@/lib/db/jobs-postgres";
 import { gatherUrlContext } from "@/lib/ingest/url";
+import { triggerJobProcessor } from "@/lib/jobs/process-workflow-job";
 import { getMemoryStore } from "@/lib/store";
-import { saveWorkflow } from "@/lib/workflows";
+import { usePostgresWorkflows } from "@/lib/supabase/admin";
+import { loadWorkflow, saveWorkflow } from "@/lib/workflows";
 
 export async function GET() {
   const templates = Object.values(WORKFLOW_TEMPLATES).map((t) => ({
@@ -21,28 +21,19 @@ export async function GET() {
     stages: t.stages,
     approvalGates: t.approvalGates,
   }));
-  return NextResponse.json({ templates });
+  return NextResponse.json({ templates, queueEnabled: usePostgresWorkflows() });
 }
 
 export async function POST(request: Request) {
-  const body = await request.json();
-  const templateId = body.templateId as WorkflowTemplateId;
-  const title = String(body.title ?? "").trim();
-  const userPrompt = String(body.prompt ?? "").trim();
+  const parsed = await parseJsonBody(request, createWorkflowBodySchema);
+  if ("error" in parsed) return parsed.error;
 
-  if (!templateId || !WORKFLOW_TEMPLATES[templateId]) {
-    return NextResponse.json({ error: "Invalid template" }, { status: 400 });
-  }
-  if (!title || !userPrompt) {
-    return NextResponse.json({ error: "Title and prompt required" }, { status: 400 });
-  }
+  const { templateId, title, prompt: userPrompt } = parsed.data;
 
   const store = getMemoryStore();
   await store.ensureReady();
   const memoryContext = await store.getContextForPrompt(userPrompt);
 
-  // Fetch any URLs in the title/prompt so agents reason over real page content
-  // instead of guessing from the link. Best-effort; failures are surfaced, not fatal.
   const gathered = await gatherUrlContext(`${title}\n${userPrompt}`);
   const ingestNotes: string[] = [];
 
@@ -66,15 +57,34 @@ export async function POST(request: Request) {
 
   const sourceContext = gathered.context || undefined;
 
-  let workflow = createWorkflow(templateId, title, userPrompt, sourceContext);
-  workflow = await runCurrentStageWithRunner(workflow, runAgent, memoryContext);
-  await saveWorkflow(workflow);
+  let workflow = createWorkflow(
+    templateId,
+    title,
+    userPrompt,
+    sourceContext,
+    memoryContext || undefined,
+  );
+
+  if (usePostgresWorkflows()) {
+    await saveWorkflow(workflow);
+    await enqueueWorkflowJob(workflow.id);
+    triggerJobProcessor();
+    workflow = (await loadWorkflow(workflow.id)) ?? workflow;
+  } else {
+    workflow = await runCurrentStageWithRunner(workflow, runAgent);
+    await saveWorkflow(workflow);
+  }
 
   return NextResponse.json({
     workflow: summarizeWorkflow(workflow),
     full: workflow,
+    queued: usePostgresWorkflows(),
     ingest: {
-      fetched: gathered.imported.map((d) => ({ url: d.url, title: d.title })),
+      fetched: gathered.imported.map((d) => ({
+        url: d.url,
+        title: d.title,
+        fetchedAt: d.fetchedAt,
+      })),
       failed: gathered.failed,
       notes: ingestNotes,
     },
