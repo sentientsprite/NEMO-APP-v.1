@@ -9,6 +9,7 @@ import {
 import type { WorkflowTemplateId } from "@nemo/agents";
 
 import { runAgent } from "@/lib/ai/run-agent";
+import { gatherUrlContext } from "@/lib/ingest/url";
 import { getMemoryStore } from "@/lib/store";
 import { saveWorkflow } from "@/lib/workflows";
 
@@ -40,12 +41,42 @@ export async function POST(request: Request) {
   await store.ensureReady();
   const memoryContext = await store.getContextForPrompt(userPrompt);
 
-  let workflow = createWorkflow(templateId, title, userPrompt);
+  // Fetch any URLs in the title/prompt so agents reason over real page content
+  // instead of guessing from the link. Best-effort; failures are surfaced, not fatal.
+  const gathered = await gatherUrlContext(`${title}\n${userPrompt}`);
+  const ingestNotes: string[] = [];
+
+  for (const doc of gathered.imported) {
+    try {
+      await store.addDocument({
+        title: doc.title,
+        content: doc.content,
+        sourceType: "url",
+        sourceUrl: doc.url,
+      });
+    } catch {
+      // Indexing is a convenience; the workflow still gets the content below.
+    }
+  }
+  if (gathered.failed.length > 0) {
+    ingestNotes.push(
+      ...gathered.failed.map((f) => `Could not fetch ${f.url}: ${f.error}`),
+    );
+  }
+
+  const sourceContext = gathered.context || undefined;
+
+  let workflow = createWorkflow(templateId, title, userPrompt, sourceContext);
   workflow = await runCurrentStageWithRunner(workflow, runAgent, memoryContext);
   await saveWorkflow(workflow);
 
   return NextResponse.json({
     workflow: summarizeWorkflow(workflow),
     full: workflow,
+    ingest: {
+      fetched: gathered.imported.map((d) => ({ url: d.url, title: d.title })),
+      failed: gathered.failed,
+      notes: ingestNotes,
+    },
   });
 }

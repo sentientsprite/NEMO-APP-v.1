@@ -1,57 +1,7 @@
 import { NextResponse } from "next/server";
 
+import { importUrl } from "@/lib/ingest/url";
 import { getMemoryStore } from "@/lib/store";
-
-const MAX_IMPORT_CHARS = 80_000;
-
-function isPrivateHost(hostname: string): boolean {
-  const host = hostname.toLowerCase();
-  if (host === "localhost" || host.endsWith(".local")) return true;
-  if (host === "::1" || host.startsWith("127.")) return true;
-  if (host.startsWith("10.") || host.startsWith("192.168.")) return true;
-
-  const match = host.match(/^172\.(\d+)\./);
-  if (match) {
-    const second = Number(match[1]);
-    if (second >= 16 && second <= 31) return true;
-  }
-
-  return false;
-}
-
-function htmlToText(html: string): string {
-  return html
-    .replace(/<script[\s\S]*?<\/script>/gi, "")
-    .replace(/<style[\s\S]*?<\/style>/gi, "")
-    .replace(/<[^>]+>/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-async function importUrl(sourceUrl: string): Promise<{ title: string; content: string }> {
-  const url = new URL(sourceUrl);
-  if (!["http:", "https:"].includes(url.protocol)) {
-    throw new Error("Only http and https URLs are supported");
-  }
-  if (isPrivateHost(url.hostname)) {
-    throw new Error("Private or local URLs are blocked for safety");
-  }
-
-  const res = await fetch(url, {
-    headers: {
-      "user-agent": "NEMO-Workspace/0.1 (+https://github.com/sentientsprite/NEMO-APP-v.1)",
-    },
-  });
-  if (!res.ok) throw new Error(`URL returned ${res.status}`);
-
-  const raw = (await res.text()).slice(0, MAX_IMPORT_CHARS);
-  const contentType = res.headers.get("content-type") ?? "";
-  const content = contentType.includes("html") ? htmlToText(raw) : raw;
-  const titleMatch = raw.match(/<title[^>]*>([^<]+)<\/title>/i);
-  const title = titleMatch?.[1]?.trim() || url.hostname;
-
-  return { title, content };
-}
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);

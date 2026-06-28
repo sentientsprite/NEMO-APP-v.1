@@ -37,6 +37,12 @@ export interface WorkflowRecord {
   createdAt: string;
   updatedAt: string;
   auditLog: AuditEntry[];
+  /**
+   * Grounding context gathered once at creation (e.g. fetched URL page text).
+   * Persisted on the record so every stage — including those reached after an
+   * approval — sees the same source material.
+   */
+  sourceContext?: string;
 }
 
 export interface AuditEntry {
@@ -49,6 +55,7 @@ export function createWorkflow(
   templateId: WorkflowTemplateId,
   title: string,
   userPrompt: string,
+  sourceContext?: string,
 ): WorkflowRecord {
   const template = WORKFLOW_TEMPLATES[templateId];
   const now = new Date().toISOString();
@@ -67,7 +74,20 @@ export function createWorkflow(
     createdAt: now,
     updatedAt: now,
     auditLog: [{ at: now, action: "workflow_created", detail: templateId }],
+    sourceContext: sourceContext?.trim() || undefined,
   };
+}
+
+/** Combines persisted source context with any per-call memory context. */
+function combinedContext(
+  workflow: WorkflowRecord,
+  memoryContext?: string,
+): string | undefined {
+  const merged = [workflow.sourceContext, memoryContext]
+    .map((part) => part?.trim())
+    .filter(Boolean)
+    .join("\n\n");
+  return merged || undefined;
 }
 
 function priorOutputs(workflow: WorkflowRecord): Record<string, unknown> {
@@ -272,7 +292,7 @@ export async function runCurrentStageWithRunner(
     workflowTitle: workflow.title,
     userPrompt: workflow.userPrompt,
     priorOutputs: priorOutputs(workflow),
-    memoryContext,
+    memoryContext: combinedContext(workflow, memoryContext),
   };
 
   const output = await runner(input);
