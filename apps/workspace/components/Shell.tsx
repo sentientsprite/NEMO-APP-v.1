@@ -1,8 +1,10 @@
 import Link from "next/link";
 
+import type { PlanInfo } from "@/lib/plan";
+
 const STAGES = ["understand", "plan", "approve", "execute", "verify", "report"] as const;
 
-export function Header() {
+export function Header({ plan }: { plan: PlanInfo }) {
   return (
     <header className="sticky top-0 z-50 border-b border-nemo-border bg-nemo-surface px-6 py-4">
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-4">
@@ -10,28 +12,81 @@ export function Header() {
           <span className="text-2xl">🐠</span>
           NEMO Workspace
         </Link>
-        <nav className="flex gap-2 text-sm">
-          <Link
-            href="/"
-            className="rounded-md px-3 py-2 text-nemo-muted transition hover:bg-[#21262d] hover:text-nemo-text"
-          >
-            Dashboard
-          </Link>
-          <Link
-            href="/workflows/new"
-            className="rounded-md px-3 py-2 text-nemo-muted transition hover:bg-[#21262d] hover:text-nemo-text"
-          >
-            New workflow
-          </Link>
-          <Link
-            href="/memory"
-            className="rounded-md px-3 py-2 text-nemo-muted transition hover:bg-[#21262d] hover:text-nemo-text"
-          >
-            Memory
-          </Link>
-        </nav>
+        <div className="flex items-center gap-3">
+          <PlanBadge plan={plan} />
+          <nav className="flex gap-2 text-sm">
+            <Link
+              href="/"
+              className="rounded-md px-3 py-2 text-nemo-muted transition hover:bg-[#21262d] hover:text-nemo-text"
+            >
+              Dashboard
+            </Link>
+            <Link
+              href="/workflows/new"
+              className="rounded-md px-3 py-2 text-nemo-muted transition hover:bg-[#21262d] hover:text-nemo-text"
+            >
+              New workflow
+            </Link>
+            <Link
+              href="/memory"
+              className="rounded-md px-3 py-2 text-nemo-muted transition hover:bg-[#21262d] hover:text-nemo-text"
+            >
+              Memory
+            </Link>
+            <Link
+              href="/pricing"
+              className="rounded-md px-3 py-2 text-nemo-muted transition hover:bg-[#21262d] hover:text-nemo-text"
+            >
+              Plans
+            </Link>
+          </nav>
+        </div>
       </div>
     </header>
+  );
+}
+
+export function PlanBadge({ plan }: { plan: PlanInfo }) {
+  const styles: Record<PlanInfo["tier"], string> = {
+    demo: "border-nemo-accent text-nemo-accent",
+    paywall: "border-nemo-warning text-nemo-warning",
+    production: "border-nemo-success text-nemo-success",
+  };
+
+  return (
+    <span
+      className={`hidden rounded-full border px-2.5 py-0.5 text-xs font-medium sm:inline ${styles[plan.tier]}`}
+      title={plan.tagline}
+    >
+      {plan.label}
+    </span>
+  );
+}
+
+export function PlanBanner({ plan }: { plan: PlanInfo }) {
+  if (plan.tier === "production") return null;
+
+  const isDemo = plan.tier === "demo";
+
+  return (
+    <div
+      className={`mb-6 rounded-lg border p-4 text-sm ${
+        isDemo
+          ? "border-nemo-accent bg-[#21262d] text-nemo-muted"
+          : "border-nemo-warning bg-[#21262d] text-nemo-muted"
+      }`}
+    >
+      <p className="font-medium text-nemo-text">{plan.label}</p>
+      <p className="mt-1">{plan.tagline}</p>
+      {plan.paywallUrl && (
+        <Link
+          href="/pricing"
+          className="mt-2 inline-block text-nemo-accent underline"
+        >
+          {plan.upgradeLabel || "Compare plans"}
+        </Link>
+      )}
+    </div>
   );
 }
 
@@ -69,6 +124,26 @@ export function StatusBadge({ status }: { status: string }) {
       className={`rounded-full border px-2.5 py-0.5 text-xs font-medium capitalize ${colors[status] ?? colors.pending}`}
     >
       {status.replace(/_/g, " ")}
+    </span>
+  );
+}
+
+export function ProviderBadge({ provider }: { provider?: string }) {
+  if (!provider) return null;
+
+  const labels: Record<string, { text: string; className: string }> = {
+    grounded_demo: { text: "Live demo · sourced", className: "border-nemo-accent text-nemo-accent" },
+    demo: { text: "Demo fixture", className: "border-nemo-border text-nemo-muted" },
+    demo_fallback: { text: "Demo fallback", className: "border-nemo-warning text-nemo-warning" },
+    paywall_blocked: { text: "Pro required", className: "border-nemo-danger text-nemo-danger" },
+    vercel_ai_gateway: { text: "Live AI", className: "border-nemo-success text-nemo-success" },
+  };
+
+  const info = labels[provider] ?? { text: provider, className: "border-nemo-border text-nemo-muted" };
+
+  return (
+    <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase ${info.className}`}>
+      {info.text}
     </span>
   );
 }

@@ -3,12 +3,15 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-import { StagePills, StatusBadge } from "./Shell";
+import { ProviderBadge, StagePills, StatusBadge } from "./Shell";
 
 interface StageOutput {
   role: string;
   status: string;
-  output?: { markdown?: string };
+  output?: {
+    markdown?: string;
+    structured?: { provider?: string; paywallUrl?: string };
+  };
 }
 
 interface WorkflowDetailProps {
@@ -35,6 +38,10 @@ export function WorkflowDetail(props: WorkflowDetailProps) {
     router.refresh();
   }
 
+  const paywallStage = props.stages.find(
+    (s) => s.output?.structured?.provider === "paywall_blocked",
+  );
+
   return (
     <div className="space-y-8">
       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -46,6 +53,26 @@ export function WorkflowDetail(props: WorkflowDetailProps) {
       </div>
 
       <StagePills active={props.userStage} />
+
+      {paywallStage && (
+        <div className="rounded-lg border border-nemo-danger bg-[#21262d] p-4">
+          <p className="font-medium text-nemo-danger">Pro AI required</p>
+          <p className="mt-1 text-sm text-nemo-muted">
+            Live agents could not run on this deployment. Add AI Gateway credits or use the Live
+            Demo tier for sourced excerpts.
+          </p>
+          {paywallStage.output?.structured?.paywallUrl && (
+            <a
+              href={paywallStage.output.structured.paywallUrl}
+              className="mt-3 inline-block text-sm text-nemo-accent underline"
+              target="_blank"
+              rel="noreferrer"
+            >
+              Unlock Pro AI →
+            </a>
+          )}
+        </div>
+      )}
 
       {props.status === "awaiting_approval" && (
         <div className="rounded-lg border border-nemo-warning bg-[#21262d] p-4">
@@ -78,9 +105,12 @@ export function WorkflowDetail(props: WorkflowDetailProps) {
             key={stage.role}
             className="rounded-lg border border-nemo-border bg-nemo-surface p-4"
           >
-            <div className="mb-3 flex items-center justify-between gap-2">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
               <h2 className="font-medium capitalize">{stage.role.replace(/_/g, " ")}</h2>
-              <StatusBadge status={stage.status} />
+              <div className="flex items-center gap-2">
+                <ProviderBadge provider={stage.output?.structured?.provider} />
+                <StatusBadge status={stage.status} />
+              </div>
             </div>
             {stage.output?.markdown && (
               <pre className="whitespace-pre-wrap text-sm text-nemo-muted">{stage.output.markdown}</pre>

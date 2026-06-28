@@ -1,10 +1,14 @@
 import Link from "next/link";
 
-import { Header, StatusBadge } from "@/components/Shell";
+import { Header, PlanBanner, StatusBadge } from "@/components/Shell";
+import { getPlan } from "@/lib/plan";
 import { getMemoryStore } from "@/lib/store";
 import { listWorkflowSummaries } from "@/lib/workflows";
 
+export const dynamic = "force-dynamic";
+
 export default async function DashboardPage() {
+  const plan = getPlan();
   const store = getMemoryStore();
   await store.ensureReady();
   const workflows = await listWorkflowSummaries();
@@ -19,8 +23,9 @@ export default async function DashboardPage() {
 
   return (
     <div className="min-h-screen">
-      <Header />
+      <Header plan={plan} />
       <main className="mx-auto max-w-6xl px-6 py-8">
+        <PlanBanner plan={plan} />
         <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
           <div>
             <h1 className="text-3xl font-semibold">Task Hub</h1>

@@ -3,17 +3,13 @@ import { generateText, type GatewayModelId } from "ai";
 import {
   type AgentRunInput,
   type AgentRunOutput,
-  demoAgentOutput,
   getAgentDefinition,
 } from "@nemo/agents";
 
-const DEFAULT_MODEL = "anthropic/claude-sonnet-4.6" satisfies GatewayModelId;
+import { demoOutputForPlan } from "@/lib/ai/grounded-demo";
+import { getPlan } from "@/lib/plan";
 
-function liveModeEnabled(): boolean {
-  if (process.env.NEMO_AI_MODE === "demo") return false;
-  if (process.env.NEMO_AI_MODE === "live") return true;
-  return Boolean(process.env.VERCEL_OIDC_TOKEN || process.env.AI_GATEWAY_API_KEY);
-}
+const DEFAULT_MODEL = "anthropic/claude-sonnet-4.6" satisfies GatewayModelId;
 
 function modelId(): GatewayModelId {
   return (process.env.NEMO_AI_MODEL ?? DEFAULT_MODEL) as GatewayModelId;
@@ -44,6 +40,7 @@ function buildSystemPrompt(input: AgentRunInput): string {
     "Write clear Markdown for a nontechnical workspace operator.",
     "Return only the stage output. Do not claim to have changed files unless this role is allowed to build.",
     "Cite user input or memory context when making factual claims.",
+    "If source context is provided, base factual claims ONLY on that context — never invent site details.",
   ].join("\n");
 }
 
@@ -56,15 +53,44 @@ function buildUserPrompt(input: AgentRunInput): string {
   ].join("\n\n");
 }
 
+function paywallBlockedOutput(input: AgentRunInput, error: unknown): AgentRunOutput {
+  const plan = getPlan();
+  const message = error instanceof Error ? error.message : "AI Gateway unavailable";
+  const link = plan.paywallUrl || "https://vercel.com/docs/ai-gateway";
+
+  return {
+    role: input.role,
+    markdown: `# Pro AI required
+
+> **Live agent output is unavailable on this deployment.**
+>
+> ${message}
+
+## Unlock live AI
+1. Add a payment method to your [Vercel AI Gateway](${link}) account (unlocks free credits).
+2. Or deploy your own **Production** instance with \`NEMO_TIER=production\`.
+
+*This stage did not run a model — no fabricated research was inserted.*`,
+    structured: {
+      provider: "paywall_blocked",
+      error: message,
+      paywallUrl: link,
+    },
+  };
+}
+
+function withProvider(output: AgentRunOutput, provider: string): AgentRunOutput {
+  return {
+    ...output,
+    structured: { ...output.structured, provider },
+  };
+}
+
 export async function runAgent(input: AgentRunInput): Promise<AgentRunOutput> {
-  if (!liveModeEnabled()) {
-    return {
-      ...demoAgentOutput(input),
-      structured: {
-        ...demoAgentOutput(input).structured,
-        provider: "demo",
-      },
-    };
+  const plan = getPlan();
+
+  if (!plan.liveAi) {
+    return withProvider(demoOutputForPlan(input), "grounded_demo");
   }
 
   try {
@@ -80,6 +106,7 @@ export async function runAgent(input: AgentRunInput): Promise<AgentRunOutput> {
       markdown: result.text,
       structured: {
         provider: "vercel_ai_gateway",
+        tier: plan.tier,
         model: modelId(),
         finishReason: result.finishReason,
         usage: result.usage,
@@ -89,13 +116,17 @@ export async function runAgent(input: AgentRunInput): Promise<AgentRunOutput> {
         : [{ source: "user_input", excerpt: input.userPrompt.slice(0, 500) }],
     };
   } catch (error) {
-    if (process.env.NEMO_AI_STRICT === "1") throw error;
+    if (plan.strictAi) throw error;
 
-    const fallback = demoAgentOutput(input);
+    if (!plan.allowDemoOutput) {
+      return paywallBlockedOutput(input, error);
+    }
+
+    const fallback = demoOutputForPlan(input);
     return {
       ...fallback,
       markdown: [
-        `> Live model generation failed, so NEMO used demo mode for this stage.`,
+        `> Live model generation failed; showing grounded demo output instead.`,
         `> ${error instanceof Error ? error.message : "Unknown model error"}`,
         "",
         fallback.markdown,
@@ -103,8 +134,20 @@ export async function runAgent(input: AgentRunInput): Promise<AgentRunOutput> {
       structured: {
         ...fallback.structured,
         provider: "demo_fallback",
+        tier: plan.tier,
         model: modelId(),
       },
     };
   }
+}
+
+/** Exposed for /api/plan and UI. */
+export function getAgentModeSummary() {
+  const plan = getPlan();
+  return {
+    tier: plan.tier,
+    label: plan.label,
+    liveAi: plan.liveAi,
+    strictAi: plan.strictAi,
+  };
 }

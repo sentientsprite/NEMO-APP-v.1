@@ -52,22 +52,33 @@ The memory index and workflow state use a pluggable `KvStore`:
   read-only serverless filesystem. Auto-selected when `BLOB_READ_WRITE_TOKEN`
   is present or when running on Vercel.
 
+## Deployment tiers
+
+Three Vercel projects (or env configs) map to product tiers:
+
+| Tier | `NEMO_TIER` | URL (example) | Behavior |
+|------|-------------|---------------|----------|
+| **Live Demo** | `demo` | nemo-workspace.vercel.app | Real URL fetch + grounded excerpts. No AI key. Clearly labeled. |
+| **Pro** | `paywall` | nemo-workspace-pro.vercel.app | Live AI via Gateway. Blocks honestly when credits unavailable. |
+| **Production** | `production` | your domain | Strict live AI only — fails if model unavailable. |
+
+See `/pricing` in the app for details. Each tier uses the same codebase; only env vars differ.
+
 ## Environment
 
 ```bash
 # apps/workspace/.env.local
+NEMO_TIER=demo          # demo | paywall | production
 NEMO_STORAGE=file
 NEMO_WORKSPACE_ROOT=/path/to/.nemo-workspace
-
-# Optional live generation
-NEMO_AI_MODE=live
 NEMO_AI_MODEL=anthropic/claude-sonnet-4.6
 ```
 
-Live mode uses the Vercel AI Gateway through the AI SDK. For local development,
-run `vercel link` and `vercel env pull apps/workspace/.env.local`, or provide an
-`AI_GATEWAY_API_KEY` in non-Vercel environments. If live generation fails,
-NEMO falls back to demo output unless `NEMO_AI_STRICT=1` is set.
+**Demo tier** never calls the AI Gateway — it summarizes fetched URL text extractively.
+
+**Paywall tier** calls the Gateway; if credits are missing, stages show a Pro upgrade message (no silent fake output).
+
+**Production tier** requires live AI (`NEMO_AI_STRICT=1` behavior).
 
 ## Relation to other repos
 

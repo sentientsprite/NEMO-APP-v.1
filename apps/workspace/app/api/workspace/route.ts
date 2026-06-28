@@ -1,9 +1,12 @@
 import { NextResponse } from "next/server";
 
+import { getAgentModeSummary } from "@/lib/ai/run-agent";
+import { getPlan, planForClient } from "@/lib/plan";
 import { getMemoryStore, getTemplateDir } from "@/lib/store";
 import { listWorkflowSummaries } from "@/lib/workflows";
 
 export async function GET() {
+  const plan = getPlan();
   const store = getMemoryStore();
   await store.ensureReady();
   const workflows = await listWorkflowSummaries();
@@ -13,6 +16,8 @@ export async function GET() {
     workspaceRoot: process.env.NEMO_WORKSPACE_ROOT ?? ".nemo-workspace",
     documentCount: docs.length,
     workflows,
+    plan: planForClient(plan),
+    agent: getAgentModeSummary(),
   });
 }
 

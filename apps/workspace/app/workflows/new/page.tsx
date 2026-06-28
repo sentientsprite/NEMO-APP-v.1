@@ -2,13 +2,15 @@ import { WORKFLOW_TEMPLATES } from "@nemo/agents";
 
 import { Header } from "@/components/Shell";
 import { NewWorkflowForm } from "@/components/NewWorkflowForm";
+import { getPlan } from "@/lib/plan";
 
 export default async function NewWorkflowPage() {
+  const plan = getPlan();
   const templates = Object.values(WORKFLOW_TEMPLATES);
 
   return (
     <div className="min-h-screen">
-      <Header />
+      <Header plan={plan} />
       <main className="mx-auto max-w-2xl px-6 py-8">
         <h1 className="mb-2 text-2xl font-semibold">New workflow</h1>
         <p className="mb-8 text-nemo-muted">
