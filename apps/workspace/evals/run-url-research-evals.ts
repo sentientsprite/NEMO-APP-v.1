@@ -11,8 +11,11 @@ import {
 } from "./url-research.fixtures";
 import {
   assertPublicUrl,
+  decodeEntities,
+  extractMetaDescription,
   extractUrls,
   gatherUrlContext,
+  htmlToText,
   isPrivateHost,
 } from "../lib/ingest/url";
 
@@ -48,6 +51,31 @@ async function main() {
   await ok("extractUrls dedupes", () => {
     const urls = extractUrls("See https://example.com and https://example.com/.");
     assert.equal(urls.length, 2);
+  });
+
+  await ok("htmlToText strips svg/script/style/comments", () => {
+    const html = `<html><head><title>X</title><style>.a{}</style></head>
+      <body><!-- nav comment --><svg><path d="M89.6836 43.0Z"/></svg>
+      <script>var x = 1;</script>
+      <p>Real sentence about the product.</p></body></html>`;
+    const text = htmlToText(html);
+    assert.ok(!/path d=/.test(text), "should not contain svg path data");
+    assert.ok(!/var x/.test(text), "should not contain script");
+    assert.ok(!/<!--/.test(text), "should not contain comments");
+    assert.match(text, /Real sentence about the product\./);
+  });
+
+  await ok("decodeEntities handles named and numeric", () => {
+    assert.equal(decodeEntities("Tom &amp; Jerry &#39;s &#x2014; caf&eacute;").includes("&"), true);
+    assert.match(decodeEntities("a &mdash; b"), /—/);
+    assert.match(decodeEntities("it&#39;s"), /it's/);
+  });
+
+  await ok("extractMetaDescription reads description + og", () => {
+    const html = `<meta name="description" content="A friendly summary.">`;
+    assert.equal(extractMetaDescription(html), "A friendly summary.");
+    const og = `<meta property="og:description" content="OG summary &amp; more">`;
+    assert.match(extractMetaDescription(og) ?? "", /OG summary & more/);
   });
 
   for (const fixture of URL_RESEARCH_FIXTURES) {

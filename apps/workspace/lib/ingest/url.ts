@@ -31,19 +31,93 @@ export function assertPublicUrl(url: URL): void {
   }
 }
 
+const NAMED_ENTITIES: Record<string, string> = {
+  amp: "&",
+  lt: "<",
+  gt: ">",
+  quot: '"',
+  apos: "'",
+  nbsp: " ",
+  mdash: "—",
+  ndash: "–",
+  hellip: "…",
+  rsquo: "’",
+  lsquo: "‘",
+  rdquo: "”",
+  ldquo: "“",
+  copy: "©",
+  reg: "®",
+  trade: "™",
+};
+
+export function decodeEntities(text: string): string {
+  return text
+    .replace(/&#x([0-9a-f]+);/gi, (_, hex) =>
+      safeFromCodePoint(parseInt(hex, 16)),
+    )
+    .replace(/&#(\d+);/g, (_, dec) => safeFromCodePoint(parseInt(dec, 10)))
+    .replace(/&([a-z]+);/gi, (match, name) => NAMED_ENTITIES[name.toLowerCase()] ?? match);
+}
+
+function safeFromCodePoint(code: number): string {
+  if (!Number.isFinite(code) || code < 0 || code > 0x10ffff) return "";
+  try {
+    return String.fromCodePoint(code);
+  } catch {
+    return "";
+  }
+}
+
+/**
+ * Converts HTML to readable plain text. Removes non-content regions (script,
+ * style, svg, head, nav, footer, comments), preserves block boundaries as
+ * newlines so sentences don't run together, then decodes entities.
+ */
 export function htmlToText(html: string): string {
-  return html
-    .replace(/<script[\s\S]*?<\/script>/gi, "")
-    .replace(/<style[\s\S]*?<\/style>/gi, "")
-    .replace(/<[^>]+>/g, " ")
-    .replace(/\s+/g, " ")
+  const withoutNoise = html
+    .replace(/<!--[\s\S]*?-->/g, " ")
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<svg[\s\S]*?<\/svg>/gi, " ")
+    .replace(/<noscript[\s\S]*?<\/noscript>/gi, " ")
+    .replace(/<head[\s\S]*?<\/head>/gi, " ")
+    .replace(/<nav[\s\S]*?<\/nav>/gi, " ")
+    .replace(/<footer[\s\S]*?<\/footer>/gi, " ");
+
+  const withBreaks = withoutNoise
+    .replace(/<\/(p|div|section|article|li|h[1-6]|tr|header)>/gi, "\n")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<li[^>]*>/gi, "\n- ");
+
+  const stripped = withBreaks.replace(/<[^>]+>/g, " ");
+
+  return decodeEntities(stripped)
+    .replace(/[ \t\f\v]+/g, " ")
+    .replace(/ *\n */g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
     .trim();
+}
+
+/** Extracts the best available short page description from raw HTML. */
+export function extractMetaDescription(html: string): string | undefined {
+  const patterns = [
+    /<meta[^>]+name=["']description["'][^>]+content=["']([^"']+)["']/i,
+    /<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']+)["']/i,
+    /<meta[^>]+content=["']([^"']+)["'][^>]+name=["']description["']/i,
+  ];
+  for (const re of patterns) {
+    const match = html.match(re);
+    const value = match?.[1]?.trim();
+    if (value) return decodeEntities(value);
+  }
+  return undefined;
 }
 
 export interface ImportedUrl {
   url: string;
   title: string;
   content: string;
+  description?: string;
   fetchedAt: string;
   contentType?: string;
 }
@@ -142,9 +216,20 @@ export async function importUrl(sourceUrl: string): Promise<ImportedUrl> {
 
   const raw = (await readResponseText(res, MAX_URL_BYTES)).slice(0, MAX_IMPORT_CHARS);
   const contentType = res.headers.get("content-type") ?? "";
-  const content = contentType.includes("html") ? htmlToText(raw) : raw;
-  const titleMatch = raw.match(/<title[^>]*>([^<]+)<\/title>/i);
-  const title = titleMatch?.[1]?.trim() || finalUrl.hostname;
+  const isHtml = contentType.includes("html");
+  const bodyText = isHtml ? htmlToText(raw) : raw.trim();
+  const description = isHtml ? extractMetaDescription(raw) : undefined;
+  const titleMatch = raw.match(/<title[^>]*>([^<]*)<\/title>/i);
+  const title = (titleMatch?.[1] ? decodeEntities(titleMatch[1]).trim() : "") || finalUrl.hostname;
+
+  // SPA / JS-rendered pages often expose little server-side text. Fall back to
+  // the meta description so demo summaries have real, citable content instead
+  // of leftover markup fragments.
+  const MIN_BODY_CHARS = 120;
+  let content = bodyText;
+  if (bodyText.length < MIN_BODY_CHARS && description) {
+    content = [description, bodyText].filter(Boolean).join("\n\n").trim();
+  }
 
   if (!content.trim()) {
     throw new Error("No readable text extracted from URL");
@@ -154,6 +239,7 @@ export async function importUrl(sourceUrl: string): Promise<ImportedUrl> {
     url: finalUrl.toString(),
     title,
     content,
+    description,
     fetchedAt: new Date().toISOString(),
     contentType: contentType.split(";")[0]?.trim(),
   };
@@ -200,10 +286,10 @@ export async function gatherUrlContext(
   }
 
   const context = imported
-    .map(
-      (doc) =>
-        `### Source: ${doc.title} (${doc.url})\n_fetched ${doc.fetchedAt}_\n${doc.content}`,
-    )
+    .map((doc) => {
+      const summary = doc.description ? `_Summary:_ ${doc.description}\n` : "";
+      return `### Source: ${doc.title} (${doc.url})\n_fetched ${doc.fetchedAt}_\n${summary}${doc.content}`;
+    })
     .join("\n\n");
 
   return { imported, failed, context };

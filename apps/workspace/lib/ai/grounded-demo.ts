@@ -7,6 +7,7 @@ import {
 interface SourceBlock {
   title: string;
   url?: string;
+  description?: string;
   body: string;
 }
 
@@ -27,18 +28,41 @@ function parseSourceBlocks(context: string): SourceBlock[] {
       const header = (lineBreak === -1 ? block : block.slice(0, lineBreak)).trim();
       const urlMatch = header.match(/\((https?:\/\/[^)]+)\)/);
       const title = header.replace(/\s*\([^)]+\)\s*$/, "").trim();
-      const body = (lineBreak === -1 ? "" : block.slice(lineBreak + 1)).trim();
-      return { title, url: urlMatch?.[1], body };
+      const rest = lineBreak === -1 ? "" : block.slice(lineBreak + 1);
+
+      const lines = rest.split("\n");
+      let description: string | undefined;
+      const bodyLines: string[] = [];
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (/^_fetched .*_$/.test(trimmed)) continue;
+        const summaryMatch = trimmed.match(/^_Summary:_\s*(.+)$/);
+        if (summaryMatch) {
+          description = summaryMatch[1].trim();
+          continue;
+        }
+        bodyLines.push(line);
+      }
+
+      return {
+        title,
+        url: urlMatch?.[1],
+        description,
+        body: bodyLines.join("\n").trim(),
+      };
     })
-    .filter((s) => s.body.length > 0);
+    .filter((s) => s.body.length > 0 || Boolean(s.description));
 }
 
+const JUNK_FRAGMENT = /^[^a-zA-Z0-9]*$|<[a-z]|\bpath d=|^[\d.\s]+$/i;
+
+/** Pull readable sentence-like fragments, skipping leftover markup/SVG noise. */
 function bulletsFromText(text: string, max = 5): string[] {
-  const sentences = text
-    .split(/(?<=[.!?])\s+/)
-    .map((s) => s.trim())
-    .filter((s) => s.length > 24);
-  return sentences.slice(0, max);
+  return text
+    .split(/(?<=[.!?])\s+|\n+/)
+    .map((s) => s.replace(/\s+/g, " ").trim())
+    .filter((s) => s.length > 24 && s.split(" ").length >= 4 && !JUNK_FRAGMENT.test(s))
+    .slice(0, max);
 }
 
 /**
@@ -50,12 +74,23 @@ export function groundedDemoOutput(input: AgentRunInput): AgentRunOutput | null 
   if (!context) return null;
 
   const sources = parseSourceBlocks(context);
-  const combined = sources.map((s) => s.body).join("\n\n") || context;
+  const descriptions = sources.map((s) => s.description).filter(Boolean) as string[];
+  const combined =
+    sources.map((s) => [s.description, s.body].filter(Boolean).join("\n")).join("\n\n") ||
+    context;
   const excerptText = excerpt(combined, 1200);
-  const bullets = bulletsFromText(combined);
+  const bodyBullets = bulletsFromText(combined);
+  const bullets = bodyBullets.length > 0 ? bodyBullets : descriptions;
   const sourceList =
     sources.length > 0
-      ? sources.map((s) => `- **${s.title}**${s.url ? ` (${s.url})` : ""}`).join("\n")
+      ? sources
+          .map(
+            (s) =>
+              `- **${s.title}**${s.url ? ` (${s.url})` : ""}${
+                s.description ? ` — ${s.description}` : ""
+              }`,
+          )
+          .join("\n")
       : "- Indexed memory context";
 
   const demoNote =
