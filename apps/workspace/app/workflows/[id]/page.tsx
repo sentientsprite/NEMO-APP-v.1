@@ -32,6 +32,8 @@ export default async function WorkflowPage({
           userStage={summary.userStage}
           userPrompt={workflow.userPrompt}
           stages={workflow.stages}
+          auditLog={workflow.auditLog}
+          sourceContext={workflow.sourceContext}
         />
       </main>
     </div>

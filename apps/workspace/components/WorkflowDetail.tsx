@@ -13,6 +13,14 @@ interface StageOutput {
     markdown?: string;
     structured?: { provider?: string; paywallUrl?: string };
   };
+  startedAt?: string;
+  completedAt?: string;
+}
+
+interface AuditEntry {
+  at: string;
+  action: string;
+  detail?: string;
 }
 
 interface WorkflowDetailProps {
@@ -22,6 +30,8 @@ interface WorkflowDetailProps {
   userStage: string;
   userPrompt: string;
   stages: StageOutput[];
+  auditLog: AuditEntry[];
+  sourceContext?: string;
 }
 
 const STAGE_LABELS: Record<string, string> = {
@@ -31,6 +41,83 @@ const STAGE_LABELS: Record<string, string> = {
   builder: "build output",
   validator: "validation report",
 };
+
+const AUDIT_LABELS: Record<string, string> = {
+  workflow_created: "Workflow created",
+  stage_started: "Stage started",
+  stage_advanced: "Advanced to next stage",
+  approval_required: "Approval requested",
+  stage_approved: "Checkpoint approved",
+  stage_rejected: "Checkpoint rejected",
+  workflow_completed: "Workflow completed",
+};
+
+const PROVIDER_LABELS: Record<string, string> = {
+  grounded_demo: "Demo output generated from fetched sources",
+  demo: "Demo fixture generated",
+  demo_fallback: "Live AI unavailable, demo fallback used",
+  paywall_blocked: "Live AI blocked by paywall",
+  vercel_ai_gateway: "Live AI response generated",
+};
+
+function formatTime(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function detailLabel(detail?: string): string | undefined {
+  if (!detail) return undefined;
+  return STAGE_LABELS[detail] ?? detail.replace(/_/g, " ");
+}
+
+function buildTimeline(props: WorkflowDetailProps) {
+  const items = props.auditLog.map((entry) => ({
+    at: entry.at,
+    label: AUDIT_LABELS[entry.action] ?? entry.action.replace(/_/g, " "),
+    detail: detailLabel(entry.detail),
+    tone:
+      entry.action.includes("approval")
+        ? "warning"
+        : entry.action.includes("completed")
+          ? "success"
+          : "neutral",
+  }));
+
+  if (props.sourceContext?.trim()) {
+    items.push({
+      at: props.auditLog[0]?.at ?? new Date().toISOString(),
+      label: "Source context captured",
+      detail: "URL or memory text saved for grounded demo output",
+      tone: "accent",
+    });
+  }
+
+  for (const stage of props.stages) {
+    const provider = stage.output?.structured?.provider;
+    if (!provider) continue;
+    items.push({
+      at: stage.completedAt ?? stage.startedAt ?? props.auditLog[0]?.at ?? new Date().toISOString(),
+      label: PROVIDER_LABELS[provider] ?? `Provider: ${provider}`,
+      detail: detailLabel(stage.role),
+      tone:
+        provider === "paywall_blocked"
+          ? "danger"
+          : provider === "vercel_ai_gateway"
+            ? "success"
+            : provider.includes("demo")
+              ? "accent"
+              : "neutral",
+    });
+  }
+
+  return items.sort((a, b) => a.at.localeCompare(b.at));
+}
 
 export function WorkflowDetail(props: WorkflowDetailProps) {
   const router = useRouter();
@@ -71,6 +158,7 @@ export function WorkflowDetail(props: WorkflowDetailProps) {
   const remainingGates = props.stages.filter(
     (s) => s.status === "awaiting_approval" || s.status === "pending",
   ).length;
+  const timeline = buildTimeline(props);
 
   return (
     <div className="space-y-8">
@@ -138,6 +226,45 @@ export function WorkflowDetail(props: WorkflowDetailProps) {
           </div>
         </div>
       )}
+
+      <section className="rounded-lg border border-nemo-border bg-nemo-surface p-4">
+        <div className="mb-4">
+          <h2 className="font-medium">What happened?</h2>
+          <p className="mt-1 text-sm text-nemo-muted">
+            A plain-English timeline of source fetching, demo/live mode, and approval gates.
+          </p>
+        </div>
+        {timeline.length === 0 ? (
+          <p className="text-sm text-nemo-muted">No audit events recorded yet.</p>
+        ) : (
+          <ol className="space-y-3">
+            {timeline.map((item, index) => (
+              <li key={`${item.at}-${item.label}-${index}`} className="flex gap-3">
+                <span
+                  className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${
+                    item.tone === "success"
+                      ? "bg-nemo-success"
+                      : item.tone === "warning"
+                        ? "bg-nemo-warning"
+                        : item.tone === "danger"
+                          ? "bg-nemo-danger"
+                          : item.tone === "accent"
+                            ? "bg-nemo-accent"
+                            : "bg-nemo-muted"
+                  }`}
+                />
+                <div>
+                  <p className="text-sm text-nemo-text">
+                    <span className="font-medium">{item.label}</span>
+                    {item.detail ? <span className="text-nemo-muted"> · {item.detail}</span> : null}
+                  </p>
+                  <p className="text-xs text-nemo-muted">{formatTime(item.at)}</p>
+                </div>
+              </li>
+            ))}
+          </ol>
+        )}
+      </section>
 
       <div className="space-y-4">
         {props.stages.map((stage) => (
