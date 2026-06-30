@@ -6,13 +6,14 @@
 
 <!-- BEGIN_AUTO_STATUS -->
 
-_Last aggregated: 2026-06-30T22:44:07.003Z_
+_Last aggregated: 2026-06-30T23:41:45.398Z_
 
 | Component | State | Last reported | Summary |
 |---|---|---|---|
 | openclaw | unknown | — | — |
 | paperclip-workspace | unknown | — | — |
-| nemo-workspace | unknown | — | — |
+| nemo-workspace-legacy | unknown | — | — |
+| nemo-local | unknown | — | — |
 | nemo-agent | unknown | — | — |
 | mktg-chrome-extension | unknown | — | — |
 | autoagent | unknown | — | — |
