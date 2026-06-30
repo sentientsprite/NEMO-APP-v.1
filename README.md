@@ -21,6 +21,7 @@ See [apps/workspace/README.md](apps/workspace/README.md) for full docs.
 
 ## Trunk docs
 
+- [docs/ORGANIZATION.md](docs/ORGANIZATION.md) — **repo map, deploys, naming traps**
 - [BUSINESS_PLAN.md](BUSINESS_PLAN.md)
 - [PIPELINE.md](PIPELINE.md)
 - [MILESTONES.md](MILESTONES.md)

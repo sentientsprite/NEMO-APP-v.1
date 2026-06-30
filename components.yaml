@@ -44,9 +44,9 @@ components:
       Paperclip 0.3.1. Pending approvals land at
       ~/.openclaw/workspace/ops/pending/ and surface in the dashboard.
 
-  - id: nemo-workspace
+  - id: nemo-workspace-legacy
     repo: sentientsprite/nemo-workspace
-    role: dashboard_and_config
+    role: dashboard_and_config_legacy
     business_plan_section: "5 — The Autonomous Stack"
     provides:
       - prana_dashboard
@@ -57,7 +57,76 @@ components:
     cadence: nightly
     owner: raymond
     notes: |
-      Houses the Prana Dashboard. Per-agent personas live under agents/.
+      LEGACY OpenClaw dashboard + agent config. Do not confuse with
+      trunk apps/workspace (deployed to nemo-workspace.vercel.app).
+      Per-agent personas live under agents/.
+
+  - id: trunk-workspace
+    repo: sentientsprite/NEMO-APP-v.1
+    path: apps/workspace
+    role: agent_workflow_factory
+    deploy: https://nemo-workspace.vercel.app
+    business_plan_section: "7-agent factory (product)"
+    provides:
+      - guided_workflows
+      - approval_gates
+      - url_grounded_demo
+      - audit_timeline
+    cadence: not_reported
+    owner: raymond
+    notes: |
+      NEMO Workspace product — Understand → Plan → Approve → Execute →
+      Verify → Report. Lives in trunk monorepo, not the nemo-workspace repo.
+
+  - id: trunk-outbound-crm
+    repo: sentientsprite/NEMO-APP-v.1
+    path: apps/outbound-crm
+    role: lead_operations
+    deploy: https://outbound-crm-five.vercel.app
+    business_plan_section: "Pipeline / Hunter"
+    provides:
+      - lead_queue
+      - hunter_webhook
+    cadence: not_reported
+    owner: raymond
+    notes: |
+      Receives leads from LVS wedge, Hunter, and (when wired) Spryte audit-lead.
+
+  - id: spryte
+    repo: sentientsprite/spryte
+    role: local_audit_stack
+    deploy: https://spryte-site.vercel.app
+    local_path: ~/symbiote/spryte
+    business_plan_section: "Wedge — site audit (Carey playbook)"
+    provides:
+      - site_auditor
+      - symbiote_daemon
+      - pinchtab_mlx_local_stack
+      - audit_lead_capture
+    cadence: not_reported
+    owner: raymond
+    notes: |
+      Local-first monorepo (daemon, TUI, auditor, web). Production deploy
+      is apps/web only; PinchTab + MLX run on Mac Mini via start-stack.sh.
+      Not the same as autoagent/spryte/ (web subset without daemon).
+
+  - id: nemo-local
+    repo: sentientsprite/autoagent
+    path: nemo-saas
+    role: phase4_saas_wedge
+    deploy: https://nemo-app-v-1.vercel.app
+    business_plan_section: "Phase 4 — GBP Local Visibility Score"
+    provides:
+      - local_visibility_audit
+      - pdf_report
+      - lvs_lead_capture
+      - inngest_workflows
+    cadence: nightly
+    owner: raymond
+    notes: |
+      Phase 4 scaffold (dormant per milestone gate). Deployed as nemo-app-v-1.
+      Requires GOOGLE_MAPS_API_KEY + RESEND_API_KEY for real audits + email.
+      Skill source of truth shared with autoagent/tasks/local_visibility_audit.
 
   - id: nemo-agent
     repo: sentientsprite/nemo-agent

@@ -62,23 +62,28 @@ export async function POST(request: Request) {
   const external_id = typeof body.external_id === "string" ? body.external_id.trim() : undefined;
 
   const isLvsWedge = source === "lvs_wedge";
+  const isSpryteAudit = source === "spryte_audit";
 
   if (!name || !source) {
     return NextResponse.json({ error: "invalid_input", detail: "name and source are required" }, { status: 400 });
   }
 
-  if (!phoneRaw && !(isLvsWedge && external_id && email)) {
+  if (!phoneRaw && !((isLvsWedge || isSpryteAudit) && external_id && email)) {
     return NextResponse.json(
-      { error: "invalid_input", detail: "phone is required (or lvs_wedge with external_id + email)" },
+      {
+        error: "invalid_input",
+        detail: "phone is required (or email-only wedge with external_id + email)",
+      },
       { status: 400 },
     );
   }
 
   let phone = phoneRaw;
   let phone_normalized: string;
-  if (isLvsWedge && !phoneRaw && external_id) {
+  if ((isLvsWedge || isSpryteAudit) && !phoneRaw && external_id) {
     phone = "(email lead)";
-    phone_normalized = external_id.startsWith("lvs:") ? external_id : `lvs:${external_id}`;
+    const prefix = isLvsWedge ? "lvs:" : "spryte:";
+    phone_normalized = external_id.startsWith(prefix) ? external_id : `${prefix}${external_id}`;
   } else {
     phone_normalized = normalizePhone(phoneRaw);
     if (!phone_normalized) {
