@@ -144,6 +144,7 @@ Cross-app webhook (already wired for LVS → CRM):
 
 ## Related docs
 
+- [WEDGE_ENV_SETUP.md](./WEDGE_ENV_SETUP.md) — production env for spryte-site + nemo-app-v-1
 - [components.yaml](../components.yaml) — machine-readable component list
 - [MONOREPO_ROADMAP.md](./MONOREPO_ROADMAP.md) — subtree merge plan
 - [decisions/0001-nemo-app-v1-is-the-trunk.md](../decisions/0001-nemo-app-v1-is-the-trunk.md)
