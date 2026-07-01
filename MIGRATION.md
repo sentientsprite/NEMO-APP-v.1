@@ -64,7 +64,7 @@ repo root. Save it to `~/bin/` once, then:
 ```bash
 cd ~/path/to/openclaw           && COMPONENT_ID=openclaw              COMPONENT_ROLE=agent_runtime           prana-wire.sh
 cd ~/path/to/paperclip-workspace && COMPONENT_ID=paperclip-workspace   COMPONENT_ROLE=orchestration           prana-wire.sh
-cd ~/path/to/nemo-workspace     && COMPONENT_ID=nemo-workspace        COMPONENT_ROLE=dashboard_and_config    prana-wire.sh
+cd ~/path/to/openclaw           && COMPONENT_ID=openclaw              COMPONENT_ROLE=agent_runtime           prana-wire.sh
 cd ~/path/to/nemo-agent         && COMPONENT_ID=nemo-agent            COMPONENT_ROLE=agent_runtime_next      prana-wire.sh
 cd ~/path/to/MKTG-Chrome-Extenstion && COMPONENT_ID=mktg-chrome-extension COMPONENT_ROLE=in_browser_companion prana-wire.sh
 # autoagent is already wired (see autoagent/.prana/component.yaml)
@@ -81,7 +81,7 @@ The default `report-to-prana.yml` reports generic state (commit activity).
 Each component customizes the **"Compose status report"** step to gather
 its own metrics — see the `# Examples:` block at the bottom of
 [`templates/report-to-prana.yml`](templates/report-to-prana.yml) for
-sample blocks per component (openclaw, paperclip, nemo-workspace,
+sample blocks per component (openclaw, paperclip-workspace,
 mktg-chrome-extension).
 
 `autoagent` is already customized — see

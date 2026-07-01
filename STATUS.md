@@ -35,6 +35,4 @@ A `red` persisting > 24h opens an `escalation` Issue.
 
 (Edit below this line; everything above is overwritten by the aggregator.)
 
-- 2026-04-29 — Trunk created. Components not yet wired with the
-  reporter workflow. First nightly aggregation runs once at least one
-  component pushes a status Issue.
+- 2026-06-30 — Retired `sentientsprite/nemo-workspace` GitHub repo ([ADR 0002](decisions/0002-retire-nemo-workspace-repo.md)). OpenClaw config → `~/.openclaw/`; workflow factory → `apps/workspace`.

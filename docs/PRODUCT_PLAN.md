@@ -36,7 +36,7 @@ v1 was technology-led ("which repo is the trunk?"). For an SMB SEO/marketing Saa
 | Repo | Role under v1 | Role under v2 |
 |---|---|---|
 | [SPRYTE1.0](https://github.com/sentientsprite/SPRYTE1.0) | Canonical trunk | Source of borrowed parts (browser tool, `DGTL-MKTG-ASST` rule engine). Personal R&D + later optional messaging side-channel for Pro/Agency tiers. |
-| [nemo-workspace](https://github.com/sentientsprite/nemo-workspace) | Per-tenant template | Pattern to copy server-side: per-tenant `AGENTS.md` / `MEMORY.md` playbook stored in DB + blob, fed into LLM context. |
+| [workspace markdown pattern](../templates/workspaces/) (retired [nemo-workspace repo](../decisions/0002-retire-nemo-workspace-repo.md)) | Per-tenant template | Pattern to copy server-side: per-tenant `AGENTS.md` / `MEMORY.md` playbook stored in DB + blob, fed into LLM context. |
 | [DGTL-MKTG-ASST-main](https://github.com/sentientsprite/SPRYTE1.0/tree/main/DGTL-MKTG-ASST-main) | One of two extensions to merge | Rewire as a **thin client** to the SaaS backend (auth + insights server-side). Centralizes prompts, models, billing, and observability. |
 | [MKTG-Chrome-Extenstion](https://github.com/sentientsprite/MKTG-Chrome-Extenstion) | Merge candidate | Archive. |
 | [nemo-agent](https://github.com/sentientsprite/nemo-agent) | Adjacent | Park (trading domain). |
@@ -226,7 +226,7 @@ Each skill = (1) input schema, (2) tool allowlist, (3) deterministic-vs-LLM spli
 Your [GitHub profile](https://github.com/sentientsprite) clusters into three layers:
 
 1. **Agent runtime (TypeScript monorepo)** — [SPRYTE1.0](https://github.com/sentientsprite/SPRYTE1.0) documents a **Spryte Engine** forked from OpenClaw (the engine name in that repo's README is the historical brand; v2 productization rebrands forward to Nemo): gateway (HTTP/WebSocket), agents and tools (`exec`, browser, cron, memory, sessions), channels, sessions, plugins, and vector memory over markdown ([`ARCHITECTURE.md`](https://raw.githubusercontent.com/sentientsprite/SPRYTE1.0/main/ARCHITECTURE.md)). v1 framed this as the natural central nervous system for "a team of agents". v2 reverses: it is a personal-assistant gateway, wrong abstraction for B2B SaaS.
-2. **Operator / brand layer** — [nemo-workspace](https://github.com/sentientsprite/nemo-workspace) (`AGENTS.md`, `SOUL.md`, `MEMORY.md`, `TOKEN-EFFICIENCY.md`, `dashboard/`, `memory/`, `references/`). v2 keeps the *pattern*, drops the *deployment shape*.
+2. **Operator / brand layer** — trunk [`templates/workspaces/`](../templates/workspaces/) (`AGENTS.md`, `SOUL.md`, `MEMORY.md` pattern; legacy lived in retired `nemo-workspace` repo). v2 keeps the *pattern*, drops the *deployment shape*.
 3. **Marketing surface area** — [`DGTL-MKTG-ASST-main/`](https://github.com/sentientsprite/SPRYTE1.0/tree/main/DGTL-MKTG-ASST-main) "AI Growth Coach" Chrome extension (GA4 OAuth, rule-based insights). [MKTG-Chrome-Extenstion](https://github.com/sentientsprite/MKTG-Chrome-Extenstion) is a parallel/older HTML track.
 4. **Parallel / adjacent repos** — [nemo-agent](https://github.com/sentientsprite/nemo-agent) (trading), [openclaw](https://github.com/sentientsprite/openclaw) fork, [poly-bot-backup](https://github.com/sentientsprite/poly-bot-backup) (off-topic).
 5. **Local workspace** — [autoagent](README.md) Harbor + OpenAI Agents SDK harness. v1 deferred to "Phase 5". v2 promotes to release-gate scorecard.

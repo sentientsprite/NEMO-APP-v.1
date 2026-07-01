@@ -42,7 +42,7 @@ body:
         Examples:
         - openclaw: { "agents_active": 5, "agent_runs_24h": 7, "errors_24h": 0 }
         - paperclip-workspace: { "approvals_pending": 3, "approvals_24h": 14, "budget_used_pct": 42 }
-        - nemo-workspace: { "dashboard_uptime_pct": 100, "pipeline_rows": 5 }
+        - trunk-workspace: { "workflows_completed_24h": 3, "approval_rate_pct": 100 }
         - autoagent: { "skilleval_mean": 0.87, "skilleval_min": 0.71, "tasks_run": 7 }
       placeholder: |
         {

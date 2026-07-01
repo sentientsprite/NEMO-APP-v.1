@@ -36,7 +36,7 @@ Per [`components.yaml`](../components.yaml), the Git-backed components today:
 |----|------|------------------------------|
 | `openclaw` | `sentientsprite/openclaw` | **Low early** — runtime + local installs; subtree only if release story is redesigned |
 | `paperclip-workspace` | `sentientsprite/paperclip-workspace` | **Medium** — smaller; still local-path heavy |
-| `nemo-workspace` | `sentientsprite/nemo-workspace` | **High** — dashboard + config; natural fit under `apps/dashboard` or `packages/dashboard` |
+| `nemo-workspace` | ~~`sentientsprite/nemo-workspace`~~ | **Retired** — see [ADR 0002](../decisions/0002-retire-nemo-workspace-repo.md); dashboard pattern → trunk `templates/workspaces/` |
 | `nemo-agent` | `sentientsprite/nemo-agent` | **Medium** — experimental; merge after evaluation concludes |
 | `mktg-chrome-extension` | `sentientsprite/MKTG-Chrome-Extenstion` | **Low** — MV3 packaging + store releases often want their own root |
 | `autoagent` | `sentientsprite/autoagent` | **High** — Harbor `tasks/`, `nemo-saas/`, harness already documented as Phase 4; matches `apps/` pattern |
@@ -142,7 +142,7 @@ Submodules pin a **commit** of another repo under a path. They are valid for **r
 | **P0** | Outbound CRM MVP live | This trunk carries `apps/outbound-crm`; no other merges required |
 | **P1** | ADR approved | Pick **one** pilot component (best: **`autoagent`** for `tasks/` + `nemo-saas/` alignment) |
 | **P2** | Pilot subtree stable 30 days | Add **pnpm workspace** at trunk root if ≥2 TS apps; unify lint/typecheck |
-| **P3** | `nemo-workspace` maturity | Subtree or greenfield `apps/dashboard` — only after dashboard deploy story is clear |
+| **P3** | `apps/nemo-local` + `apps/spryte-site` | Subtree from autoagent/spryte after deploy roots documented |
 | **P4** | OpenClaw / Paperclip | Only if local-path installs are virtualized or install scripts are rewritten; else leave polyrepo |
 
 Each phase should update [`components.yaml`](../components.yaml) and (if applicable) **retire** duplicate status reporting workflows so the trunk does not double-count components.

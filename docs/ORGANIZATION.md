@@ -12,7 +12,7 @@
 │  L0  TRUNK          NEMO-APP-v.1 — strategy, milestones, apps, STATUS    │
 ├──────────────────────────────────────────────────────────────────────────┤
 │  L1  WEDGES         Public lead magnets (audit → email → CRM)          │
-│      spryte-site    Carey / site audits                                  │
+│      spryte-site    Site audit lead magnet                                    │
 │      nemo-app-v-1   GBP Local Visibility Score                           │
 ├──────────────────────────────────────────────────────────────────────────┤
 │  L2  OPERATIONS     Internal tools                                       │
@@ -38,7 +38,7 @@
 
 | Production URL | Vercel project | Source code | Role | Prod status |
 |----------------|----------------|-------------|------|-------------|
-| [spryte-site.vercel.app](https://spryte-site.vercel.app) | `spryte-site` | `sentientsprite/spryte` → `apps/web` | Site audit lead magnet (Carey playbook) | **Live** — Carey audits work; leads `persisted: false` until Supabase env |
+| [spryte-site.vercel.app](https://spryte-site.vercel.app) | `spryte-site` | `sentientsprite/spryte` → `apps/web` | Site audit lead magnet | **Live** — leads persist via Supabase |
 | [nemo-app-v-1.vercel.app](https://nemo-app-v-1.vercel.app) | `nemo-app-v-1` | `sentientsprite/autoagent` → `nemo-saas/` | GBP Local Visibility Score + PDF | **Degraded** — missing `GOOGLE_MAPS_API_KEY`, `RESEND_API_KEY` |
 | [nemo-workspace.vercel.app](https://nemo-workspace.vercel.app) | `nemo-workspace` | `NEMO-APP-v.1` → `apps/workspace` | 7-agent workflow factory (demo tier) | **Live demo** — Blob storage; Postgres queue not wired |
 | [outbound-crm-five.vercel.app](https://outbound-crm-five.vercel.app) | `outbound-crm` | `NEMO-APP-v.1` → `apps/outbound-crm` | Rep phone queue / Hunter webhook | **Live** — Supabase connected |
@@ -57,7 +57,7 @@ Local-only (no public deploy):
 
 | Name | What people think | What it actually is |
 |------|-------------------|---------------------|
-| **nemo-workspace** (GitHub repo) | The workflow app | **Old** OpenClaw dashboard + agent config (`sentientsprite/nemo-workspace`) |
+| **nemo-workspace** (GitHub repo) | The workflow app | **Retired** — was legacy OpenClaw dashboard; deleted 2026-06-30 ([ADR 0002](../decisions/0002-retire-nemo-workspace-repo.md)) |
 | **nemo-workspace** (Vercel) | Same as above | **`apps/workspace`** in NEMO-APP-v.1 — the new factory UI |
 | **NEMO Workspace** | One product | Product name for `apps/workspace`; not the GitHub `nemo-workspace` repo |
 | **spryte** (GitHub) | The website only | Monorepo: web + auditor + daemon + MLX (`~/symbiote/spryte` locally) |
@@ -73,7 +73,7 @@ Local-only (no public deploy):
 
 | When you want to… | Work in… |
 |-------------------|----------|
-| Fix Carey site audits / `/audit` | `~/symbiote/spryte` (or `sentientsprite/spryte`) |
+| Fix site audits / `/audit` | `~/symbiote/spryte` (or `sentientsprite/spryte`) |
 | Boot PinchTab + MLX locally | `~/symbiote/spryte` → `pnpm stack` |
 | Fix GBP wedge / LVS PDF email | `~/autoagent/nemo-saas` |
 | Add Harbor regression for a skill | `~/autoagent/tasks/` |
@@ -97,6 +97,69 @@ Local-only (no public deploy):
 | autoagent meta-harness | No — overnight hill-climb | Harness tuning only |
 
 **Fully autonomous agent management** = Layer 3 (OpenClaw + Symbiote + PinchTab + MLX), not any single Vercel app.
+
+---
+
+## Running autoagent locally (`~/autoagent`)
+
+**autoagent** is two things in one repo — pick the path you need:
+
+### A. SkillEval harness (regression tests for skills)
+
+Tests the agent harness against Harbor task packs in `tasks/`. Use this before shipping skill changes.
+
+```bash
+cd ~/autoagent
+curl -LsSf https://astral.sh/uv/install.sh | sh   # if needed
+uv sync
+docker build -f Dockerfile.base -t autoagent-base .
+
+# Single LVS case
+rm -rf jobs && mkdir -p jobs
+uv run harbor run \
+  -p tasks/local_visibility_audit/case_01_missing_phone_and_low_reviews/ \
+  -l 1 -n 1 --agent-import-path agent:AutoAgent \
+  -o jobs --job-name lvs_01
+
+# Full suite (parallel)
+uv run harbor run -p tasks/ -n 4 \
+  --agent-import-path agent:AutoAgent \
+  -o jobs --job-name skilleval-nightly
+
+uv run harbor view jobs/   # → http://localhost:8000
+```
+
+**Meta-agent loop** (overnight harness tuning): edit `program.md`, then point a coding agent at the repo with *"Read program.md and kick off a new experiment."* It edits `agent.py` and hill-climbs on benchmark scores.
+
+**Requires:** Docker, Python 3.10+, `uv`, model API keys in `.env` (see root `README.md`).
+
+### B. Nemo SaaS / GBP wedge (`nemo-saas/`)
+
+Local copy of what deploys as **nemo-app-v-1.vercel.app**. Full guide: [`autoagent/nemo-saas/QUICKSTART.md`](https://github.com/sentientsprite/autoagent/blob/main/nemo-saas/QUICKSTART.md).
+
+```bash
+cd ~/autoagent/nemo-saas
+pnpm install
+cp .env.example .env.local
+openssl rand -base64 32   # → NEMO_TENANT_KMS_KEY in .env.local
+
+supabase start && supabase db reset   # local Postgres + schema
+
+# Terminal 1
+pnpm dev                              # http://localhost:3000
+
+# Terminal 2
+npx inngest-cli@latest dev -u http://localhost:3000/api/inngest
+
+# Smoke test
+curl -sS -X POST http://localhost:3000/api/lvs \
+  -H 'content-type: application/json' \
+  -d '{"email":"you@example.com","businessName":"Greenline Landscaping","zip":"80302"}' | jq
+```
+
+**Optional keys:** `GOOGLE_MAPS_API_KEY` (real GBP), `OPENAI_API_KEY` (narrative), `RESEND_API_KEY` (email). Without them the wedge still runs with fixture-grade output.
+
+**Not autoagent:** Symbiote full stack (`~/symbiote/spryte` → `pnpm stack`) is separate — PinchTab + MLX + site auditor, not Harbor.
 
 ---
 

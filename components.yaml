@@ -44,23 +44,6 @@ components:
       Paperclip 0.3.1. Pending approvals land at
       ~/.openclaw/workspace/ops/pending/ and surface in the dashboard.
 
-  - id: nemo-workspace-legacy
-    repo: sentientsprite/nemo-workspace
-    role: dashboard_and_config_legacy
-    business_plan_section: "5 — The Autonomous Stack"
-    provides:
-      - prana_dashboard
-      - agent_persona_config
-      - memory
-      - references
-      - pipeline_view
-    cadence: nightly
-    owner: raymond
-    notes: |
-      LEGACY OpenClaw dashboard + agent config. Do not confuse with
-      trunk apps/workspace (deployed to nemo-workspace.vercel.app).
-      Per-agent personas live under agents/.
-
   - id: trunk-workspace
     repo: sentientsprite/NEMO-APP-v.1
     path: apps/workspace
@@ -97,7 +80,7 @@ components:
     role: local_audit_stack
     deploy: https://spryte-site.vercel.app
     local_path: ~/symbiote/spryte
-    business_plan_section: "Wedge — site audit (Carey playbook)"
+    business_plan_section: "Wedge — site audit lead magnet"
     provides:
       - site_auditor
       - symbiote_daemon

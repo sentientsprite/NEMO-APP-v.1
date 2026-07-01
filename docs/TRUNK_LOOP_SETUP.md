@@ -40,7 +40,6 @@ Repos that must have it (see **`components.yaml`**):
 |------|--------|
 | `sentientsprite/openclaw` | `PRANA_TRUNK_TOKEN` |
 | `sentientsprite/paperclip-workspace` | `PRANA_TRUNK_TOKEN` |
-| `sentientsprite/nemo-workspace` | `PRANA_TRUNK_TOKEN` |
 | `sentientsprite/nemo-agent` | `PRANA_TRUNK_TOKEN` |
 | `sentientsprite/MKTG-Chrome-Extenstion` | `PRANA_TRUNK_TOKEN` |
 | `sentientsprite/autoagent` | `PRANA_TRUNK_TOKEN` |
@@ -50,7 +49,7 @@ CLI:
 ```bash
 TOKEN='github_pat_...'   # paste once; do not commit
 
-for repo in openclaw paperclip-workspace nemo-workspace nemo-agent MKTG-Chrome-Extenstion autoagent; do
+for repo in openclaw paperclip-workspace nemo-agent MKTG-Chrome-Extenstion autoagent; do
   gh secret set PRANA_TRUNK_TOKEN --repo "sentientsprite/$repo" --body "$TOKEN"
 done
 ```
@@ -59,7 +58,7 @@ done
 
 Each component needs:
 
-- **`.prana/component.yaml`** — `id` must match **`components.yaml`** (`openclaw`, `paperclip-workspace`, `nemo-workspace`, `nemo-agent`, `mktg-chrome-extension`, `autoagent`).
+- **`.prana/component.yaml`** — `id` must match **`components.yaml`** (`openclaw`, `paperclip-workspace`, `nemo-agent`, `mktg-chrome-extension`, `autoagent`, plus trunk apps where applicable).
 - **`.github/workflows/report-to-prana.yml`** — copy from **`NEMO-APP-v.1/templates/report-to-prana.yml`** (or use the tailored **`openclaw`** variant below).
 
 **`autoagent`** already carries a tailored workflow (SkillEval + `nemo-saas/` probe); keep it unless you intentionally switch to the generic template.
