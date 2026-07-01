@@ -43,16 +43,6 @@ _(empty)_
 
 ---
 
-## Warm / pre-stage
-
-Prospects without a stage yet because contact mode is direct (not LinkedIn outreach):
-
-- **Carey** — SLC Landscaping — landscaping, multi-area coverage, spring-season urgency — Prana tier candidate — best-fit add-ons: **Beacon** (multi-area coverage) + **Bloom** (before/after seasonal content is the entire pitch) — _personal contact; first call/text is the M-APR-30 gating action_
-
-When Carey moves to a real stage, promote into the kanban above.
-
----
-
 ## Stage definitions
 
 - **Discovery** — Hunter has identified them; no contact yet
@@ -65,18 +55,18 @@ When Carey moves to a real stage, promote into the kanban above.
 ## Phase 1 conversion target (per BUSINESS_PLAN §4)
 
 20 personalized DMs by Apr 3 → 1 yes at 5% conversion rate. Currently
-3 in `Outreach Sent` + 1 in `Spark Audit Delivered` + 1 in `Warm` = **5
-prospects in motion**. Need ~15 more for the floor; Hunter's Monday
-discovery run is the engine for that.
+3 in `Outreach Sent` + 1 in `Spark Audit Delivered` = **4 prospects in
+motion**. Need ~16 more for the floor; Hunter's Monday discovery run is
+the engine for that.
 
 ## Add-on candidate flags (cross-cut)
 
-- **Beacon candidates** (multi-location or multi-service-area): Carey,
-  CTR Heating (8 areas), White Pine Dental (2 locations)
+- **Beacon candidates** (multi-location or multi-service-area): CTR
+  Heating (8 areas), White Pine Dental (2 locations)
 - **Echo candidates** (steady review/job volume): Monkey Wrench (855
   reviews), White Pine Dental, Nelson Jones (post-case sensitive timing)
-- **Bloom candidates** (visual or seasonal verticals): Carey
-  (before/after = the pitch), Nelson Jones (high-CPC content moat)
+- **Bloom candidates** (visual or seasonal verticals): Nelson Jones
+  (high-CPC content moat); seasonal home-services verticals generally
 
 ---
 
@@ -84,4 +74,4 @@ discovery run is the engine for that.
 
 This file pairs with [`MILESTONES.md`](MILESTONES.md). Each prospect's
 movement to `Paid` should reference the milestone it satisfies (e.g.
-"Carey signed Prana → satisfies M-APR-30").
+"CTR Heating signed Flow + Beacon → satisfies M-APR-30").

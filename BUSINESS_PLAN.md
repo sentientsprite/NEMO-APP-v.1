@@ -75,11 +75,11 @@ Three productized services Raymond can attach to any Flow client and which ship 
 - Monthly citation cleanup log across the top 30 directories.
 - Quarterly competitor pack audit.
 
-**Pricing.** $129/mo for the first location. +$79/mo for each additional location (Carey-validate this number).
+**Pricing.** $129/mo for the first location. +$79/mo for each additional location (validate with first multi-location client).
 
 **Seasonal Campaign Pack add-on.** $299 one-time per pack. Examples: "Utah Spring Cleanup", "Winter Snow Removal", "Back-to-School Family Dental".
 
-**Ideal client.** Multi-location service businesses (CTR Heating's 8 service areas, White Pine Dental's 2 locations, Carey's seasonal landscaping coverage).
+**Ideal client.** Multi-location service businesses (CTR Heating's 8 service areas, White Pine Dental's 2 locations, multi-area landscaping operators).
 
 #### Echo — Review Flywheel
 
@@ -151,7 +151,6 @@ Three productized services Raymond can attach to any Flow client and which ship 
 
 ### Active Pipeline (with best-fit add-ons)
 
-- **Carey — SLC Landscaping** — Personal contact. Prana tier candidate. Spring season = urgency now. **Best-fit add-ons: Beacon (multi-area coverage) + Bloom (before/after seasonal content is the entire pitch).**
 - **Kris — Monkey Wrench Plumbing** — 855 reviews, ranking #4. Flow tier. Outreach drafted. **Best-fit add-ons: Echo (turn 855 reviews into a flywheel) + Beacon (close the rank #4 → #1 gap).**
 - **Kris — CTR Heating & Air** — 382 reviews, 8 service areas. Flow tier. Outreach drafted. **Best-fit add-on: Beacon multi-location (8 locations × $79 = anchor product).**
 - **Daniel — White Pine Dental** — 2 locations, Herriman undersold. Flow tier. Outreach drafted. **Best-fit add-ons: Beacon (2 locations) + Echo (review velocity is the dental flywheel).**
@@ -165,7 +164,7 @@ Three productized services Raymond can attach to any Flow client and which ship 
 
 **Goal.** Sign first paying client. Prove the core model works. Generate first Stripe transaction.
 
-- **Channel.** Personal network first — Carey at SLC Landscaping. Direct outreach second — LinkedIn DMs to Monkey Wrench, CTR Heating, White Pine Dental, Nelson Jones.
+- **Channel.** LinkedIn DMs to Monkey Wrench, CTR Heating, White Pine Dental, Nelson Jones. Free Local Visibility Score as the lead magnet on `nemo-app-v-1`.
 - **Offer.** Lead with Spark ($1,800 one-time). Low friction entry. Deliver in 5 days. Wow them. Upsell to Flow at day 30.
 - **Platform.** Upwork for payment protection before Utah LLC is formed. No legal exposure, built-in trust signal for new clients.
 - **Outreach volume.** 20 personalized LinkedIn messages by April 3. Each references a specific audit finding. No generic templates.
@@ -175,9 +174,9 @@ Three productized services Raymond can attach to any Flow client and which ship 
 
 **Goal.** Prove each productized add-on can be sold and delivered. One paid customer per SKU.
 
-- **First Beacon by May 31.** Target Carey (multi-area landscaping) or CTR Heating (8 service areas). Anchor on per-location pricing.
+- **First Beacon by May 31.** Target CTR Heating (8 service areas) or White Pine Dental (2 locations). Anchor on per-location pricing.
 - **First Echo by Jun 30.** Target White Pine Dental or Monkey Wrench (high review volume already). Trigger: first job-completion webhook test.
-- **First Bloom by Jul 31.** Target Carey (before/after content is the natural fit). Anchor on the summer-to-fall transition.
+- **First Bloom by Jul 31.** Target a seasonal home-services client (landscaping or roofing). Anchor on the summer-to-fall transition.
 
 ### Phase 2: Systematize (May → July)
 
@@ -292,9 +291,9 @@ Every Beacon GBP post, every Echo review reply, and every Bloom blog post passes
 | Mar 20 | Local setup complete | OpenClaw + Paperclip + 5 agents running | Done |
 | Mar 27 | Stripe + approval gate | Payment infrastructure ready | Done |
 | Apr 3 | 20 prospect DMs sent | LinkedIn outreach to 4 warm prospects | Raymond |
-| Apr 15 | First discovery call | Carey or one LinkedIn prospect | Raymond |
+| Apr 15 | First discovery call | One LinkedIn prospect from pipeline | Raymond |
 | Apr 30 | First paid client | Spark audit sold + delivered | Raymond + Aria |
-| May 15 | **Beacon launched** | First Beacon SKU live in dashboard, sample report shipped to Carey | Raymond + Hunter |
+| May 15 | **Beacon launched** | First Beacon SKU live in dashboard, sample report shipped to a pipeline prospect | Raymond + Hunter |
 | May 31 | Flow upsell + first Beacon sale | Convert Spark client to $1,500/mo; sell first Beacon | Raymond + Aria |
 | Jun 15 | **Echo launched** | Job-completion webhook live, first Echo sample sequence sent | Raymond + Hunter |
 | Jun 30 | 2nd client signed + first Echo sale | Second retainer from pipeline; Echo attached to Flow | Hunter + Raymond |
@@ -308,7 +307,7 @@ Every Beacon GBP post, every Echo review reply, and every Bloom blog post passes
 
 | Risk | Mitigation |
 |---|---|
-| No response from cold outreach | Start with Carey (warm lead). 20 messages = statistically 1–2 replies at 5–10% rate. |
+| No response from cold outreach | 20 messages = statistically 1–2 replies at 5–10% rate. Follow up at day 3 and day 7. |
 | Agent hallucination in deliverables | Hallucination detector in dashboard. Raymond reviews all client-facing content before send. |
 | Anthropic API costs spike | MLX local inference in setup. Hard spend cap via Paperclip budget gates. |
 | First client dissatisfied | 30-day roadmap sets clear expectations. Weekly check-in calls. Refund policy on Spark if not delivered. |
@@ -322,11 +321,10 @@ Every Beacon GBP post, every Echo review reply, and every Bloom blog post passes
 
 ## 9. Next 7 Days — Critical Path
 
-- **Today** — Call or text Carey (801-300-6445). Pitch Spark audit at $1,800. Send Upwork link.
 - **Today** — Send LinkedIn connection + message to Kris at CTR Heating & Air (outreach drafted, lead with the 8-location Beacon angle).
 - **Tomorrow** — Send LinkedIn message to Kris at Monkey Wrench Plumbing + Daniel at White Pine Dental.
-- **Day 3** — Post Spark audit service on Upwork. Copy URL. Send to Carey if not yet responded.
-- **Day 5** — Follow up with all non-responders. Hunter sends email follow-up sequences. Draft Beacon one-pager for Carey (multi-location landscaper = perfect Beacon fit).
+- **Day 3** — Post Spark audit service on Upwork. Copy URL into outreach templates.
+- **Day 5** — Follow up with all non-responders. Hunter sends email follow-up sequences. Draft Beacon one-pager for CTR Heating (multi-location HVAC = strong Beacon fit).
 - **Day 7** — Review prana-status. Update `PIPELINE.md`. Assign Hunter to find 5 new prospects, flag any with multi-location footprints as Beacon candidates.
 
 ---
