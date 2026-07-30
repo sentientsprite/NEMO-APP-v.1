@@ -1,0 +1,38 @@
+---
+description: Route Kimi K2.7 for bulk work, Opus 4.8 for critical decisions
+alwaysApply: true
+---
+
+# Model routing — Kimi + Opus
+
+Default to **Kimi K2.7** (`moonshotai/kimi-k2.7-code`) for mechanical, high-token work in this monorepo.
+
+Escalate to **Opus 4.8** (`anthropic/claude-opus-4.8`) when:
+- Architecture or factory design changes (`packages/agents`, `packages/orchestrator`, workflow stages)
+- Security: webhooks, Supabase RLS, auth, `CRON_SECRET`, lead PII
+- Complex debugging (race conditions, job queue, heisenbugs)
+- Ambiguous requirements needing judgment, not execution
+- Final pre-ship review on production paths
+
+## Kimi-first (cheap)
+
+- CRUD in `apps/outbound-crm`, `apps/workspace`
+- Test scaffolding, CI workflows, docs, README updates
+- Multi-file refactors with a clear approved spec
+- Boilerplate: components, API routes, migrations
+
+## Opus-required (critical)
+
+- `story_writer` / `validator` equivalent decisions in conversation
+- Payment, auth, or data-isolation design
+- "Which of these three approaches?" after Kimi generated options
+
+## Prepare → decide pattern
+
+1. Kimi: generate 2–3 implementations or research a module
+2. Human: approve direction at gate
+3. Opus: pick best approach, list failure modes
+4. Kimi: implement + tests
+5. Opus: ruthless final review before merge
+
+NEMO Workspace productizes this in `apps/workspace/lib/ai/model-routing.ts`.

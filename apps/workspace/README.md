@@ -88,6 +88,18 @@ NEMO_EVAL_LIVE_FETCH=1 pnpm --filter @nemo/workspace eval:url-research
 NEMO_TIER=demo          # demo | paywall | production
 NEMO_STORAGE=file
 NEMO_WORKSPACE_ROOT=/path/to/.nemo-workspace
+
+# Model routing (default ON on Pro/Production):
+NEMO_AI_ROUTING=1
+NEMO_AI_MODEL_BULK=moonshotai/kimi-k2.7-code
+NEMO_AI_MODEL_CRITICAL=anthropic/claude-opus-4.8
+```
+
+**Model routing:** Bulk stages (`researcher`, `spec_writer`, `builder`, `test_verifier`) use **Kimi K2.7**; critical stages (`story_writer`, `validator`) use **Opus 4.8**. Gateway tags `nemo-role:*` and `nemo-tier:*` attribute cost per stage. Set `NEMO_AI_ROUTING=0` to fall back to a single `NEMO_AI_MODEL`.
+
+```bash
+# Legacy single-model mode:
+NEMO_AI_ROUTING=0
 NEMO_AI_MODEL=anthropic/claude-sonnet-4.6
 ```
 

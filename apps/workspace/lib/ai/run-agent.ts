@@ -1,4 +1,4 @@
-import { generateText, type GatewayModelId } from "ai";
+import { generateText } from "ai";
 
 import {
   type AgentRunInput,
@@ -7,13 +7,12 @@ import {
 } from "@nemo/agents";
 
 import { demoOutputForPlan } from "@/lib/ai/grounded-demo";
+import {
+  getModelRoutingSummary,
+  modelIdForRole,
+  modelTierForRole,
+} from "@/lib/ai/model-routing";
 import { getPlan } from "@/lib/plan";
-
-const DEFAULT_MODEL = "anthropic/claude-sonnet-4.6" satisfies GatewayModelId;
-
-function modelId(): GatewayModelId {
-  return (process.env.NEMO_AI_MODEL ?? DEFAULT_MODEL) as GatewayModelId;
-}
 
 function formatPriorOutputs(priorOutputs: Record<string, unknown>): string {
   const entries = Object.entries(priorOutputs);
@@ -93,12 +92,20 @@ export async function runAgent(input: AgentRunInput): Promise<AgentRunOutput> {
     return withProvider(demoOutputForPlan(input), "grounded_demo");
   }
 
+  const model = modelIdForRole(input.role);
+  const modelTier = modelTierForRole(input.role);
+
   try {
     const result = await generateText({
-      model: modelId(),
+      model,
       system: buildSystemPrompt(input),
       prompt: buildUserPrompt(input),
       maxOutputTokens: 1400,
+      providerOptions: {
+        gateway: {
+          tags: [`nemo-role:${input.role}`, `nemo-tier:${modelTier}`],
+        },
+      },
     });
 
     return {
@@ -107,7 +114,8 @@ export async function runAgent(input: AgentRunInput): Promise<AgentRunOutput> {
       structured: {
         provider: "vercel_ai_gateway",
         tier: plan.tier,
-        model: modelId(),
+        model,
+        modelTier,
         finishReason: result.finishReason,
         usage: result.usage,
       },
@@ -135,7 +143,8 @@ export async function runAgent(input: AgentRunInput): Promise<AgentRunOutput> {
         ...fallback.structured,
         provider: "demo_fallback",
         tier: plan.tier,
-        model: modelId(),
+        model,
+        modelTier,
       },
     };
   }
@@ -149,5 +158,6 @@ export function getAgentModeSummary() {
     label: plan.label,
     liveAi: plan.liveAi,
     strictAi: plan.strictAi,
+    routing: getModelRoutingSummary(),
   };
 }

@@ -120,6 +120,8 @@ export interface ImportedUrl {
   description?: string;
   fetchedAt: string;
   contentType?: string;
+  /** Deterministic on-page SEO signals when HTML was fetched. */
+  onPageAudit?: string;
 }
 
 async function readResponseText(res: Response, maxBytes: number): Promise<string> {
@@ -222,6 +224,11 @@ export async function importUrl(sourceUrl: string): Promise<ImportedUrl> {
   const titleMatch = raw.match(/<title[^>]*>([^<]*)<\/title>/i);
   const title = (titleMatch?.[1] ? decodeEntities(titleMatch[1]).trim() : "") || finalUrl.hostname;
 
+  const { extractOnPageSignals, formatOnPageAudit } = await import("./on-page-audit");
+  const onPageAudit = isHtml
+    ? formatOnPageAudit(finalUrl.toString(), extractOnPageSignals(raw))
+    : undefined;
+
   // SPA / JS-rendered pages often expose little server-side text. Fall back to
   // the meta description so demo summaries have real, citable content instead
   // of leftover markup fragments.
@@ -242,6 +249,7 @@ export async function importUrl(sourceUrl: string): Promise<ImportedUrl> {
     description,
     fetchedAt: new Date().toISOString(),
     contentType: contentType.split(";")[0]?.trim(),
+    onPageAudit,
   };
 }
 
@@ -288,7 +296,8 @@ export async function gatherUrlContext(
   const context = imported
     .map((doc) => {
       const summary = doc.description ? `_Summary:_ ${doc.description}\n` : "";
-      return `### Source: ${doc.title} (${doc.url})\n_fetched ${doc.fetchedAt}_\n${summary}${doc.content}`;
+      const audit = doc.onPageAudit ? `\n${doc.onPageAudit}\n` : "";
+      return `### Source: ${doc.title} (${doc.url})\n_fetched ${doc.fetchedAt}_\n${summary}${audit}${doc.content}`;
     })
     .join("\n\n");
 

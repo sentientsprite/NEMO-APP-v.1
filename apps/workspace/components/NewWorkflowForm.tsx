@@ -13,6 +13,7 @@ export function NewWorkflowForm({ templates }: { templates: Template[] }) {
   const router = useRouter();
   const [templateId, setTemplateId] = useState(templates[0]?.id ?? "");
   const [title, setTitle] = useState("");
+  const [url, setUrl] = useState("");
   const [prompt, setPrompt] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -22,10 +23,21 @@ export function NewWorkflowForm({ templates }: { templates: Template[] }) {
     setLoading(true);
     setError("");
 
+    const normalizedUrl = url.trim()
+      ? url.trim().match(/^https?:\/\//i)
+        ? url.trim()
+        : `https://${url.trim()}`
+      : undefined;
+
     const res = await fetch("/api/workflows", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ templateId, title, prompt }),
+      body: JSON.stringify({
+        templateId,
+        title,
+        prompt,
+        ...(normalizedUrl ? { url: normalizedUrl } : {}),
+      }),
     });
 
     const data = await res.json();
@@ -68,6 +80,22 @@ export function NewWorkflowForm({ templates }: { templates: Template[] }) {
           className="w-full rounded-lg border border-nemo-border bg-[#21262d] px-3 py-2 text-nemo-text placeholder:text-nemo-muted"
           required
         />
+      </div>
+
+      <div>
+        <label className="mb-2 block text-sm font-medium text-nemo-muted">
+          Business website URL
+        </label>
+        <input
+          type="url"
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
+          placeholder="https://superiorsealingutah.com"
+          className="w-full rounded-lg border border-nemo-border bg-[#21262d] px-3 py-2 text-nemo-text placeholder:text-nemo-muted"
+        />
+        <p className="mt-2 text-sm text-nemo-muted">
+          Optional. NEMO fetches this page first so research is grounded in real site content.
+        </p>
       </div>
 
       <div>
