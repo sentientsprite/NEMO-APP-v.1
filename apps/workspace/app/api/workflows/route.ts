@@ -28,13 +28,16 @@ export async function POST(request: Request) {
   const parsed = await parseJsonBody(request, createWorkflowBodySchema);
   if ("error" in parsed) return parsed.error;
 
-  const { templateId, title, prompt: userPrompt } = parsed.data;
+  const { templateId, title, prompt: userPrompt, url } = parsed.data;
 
   const store = getMemoryStore();
   await store.ensureReady();
   const memoryContext = await store.getContextForPrompt(userPrompt);
 
-  const gathered = await gatherUrlContext(`${title}\n${userPrompt}`);
+  // Prefer explicit URL field; also pick up any URLs pasted in title/prompt.
+  const gathered = await gatherUrlContext(
+    [url, title, userPrompt].filter(Boolean).join("\n"),
+  );
   const ingestNotes: string[] = [];
 
   for (const doc of gathered.imported) {

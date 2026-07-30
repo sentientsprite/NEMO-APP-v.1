@@ -106,7 +106,13 @@ function combinedContext(
 function priorOutputs(workflow: WorkflowRecord): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const stage of workflow.stages) {
-    if (stage.output) out[stage.role] = stage.output.structured ?? stage.output.markdown;
+    if (!stage.output) continue;
+    // Prefer markdown for agent chaining. `structured` on live AI runs is mostly
+    // provider/usage metadata — passing it alone made later stages (esp. validator)
+    // think prior work was empty.
+    out[stage.role] = stage.output.markdown?.trim()
+      ? stage.output.markdown
+      : (stage.output.structured ?? "");
   }
   return out;
 }
