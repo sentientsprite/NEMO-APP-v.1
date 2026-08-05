@@ -1,6 +1,7 @@
 import { generateText } from "ai";
 
 import {
+  type AgentRole,
   type AgentRunInput,
   type AgentRunOutput,
   getAgentDefinition,
@@ -13,6 +14,13 @@ import {
   modelTierForRole,
 } from "@/lib/ai/model-routing";
 import { getPlan } from "@/lib/plan";
+
+/** Researcher digests long URL/memory context — 1400 truncated Kimi to empty markdown. */
+function maxOutputTokensForRole(role: AgentRole): number {
+  if (role === "researcher") return 8192;
+  if (role === "builder") return 6144;
+  return 4096;
+}
 
 function formatPriorOutputs(priorOutputs: Record<string, unknown>): string {
   const entries = Object.entries(priorOutputs);
@@ -94,19 +102,39 @@ export async function runAgent(input: AgentRunInput): Promise<AgentRunOutput> {
 
   const model = modelIdForRole(input.role);
   const modelTier = modelTierForRole(input.role);
+  const system = buildSystemPrompt(input);
+  const prompt = buildUserPrompt(input);
 
-  try {
-    const result = await generateText({
+  async function generate(maxOutputTokens: number) {
+    return generateText({
       model,
-      system: buildSystemPrompt(input),
-      prompt: buildUserPrompt(input),
-      maxOutputTokens: 1400,
+      system,
+      prompt,
+      maxOutputTokens,
       providerOptions: {
         gateway: {
           tags: [`nemo-role:${input.role}`, `nemo-tier:${modelTier}`],
         },
       },
     });
+  }
+
+  try {
+    let maxOutputTokens = maxOutputTokensForRole(input.role);
+    let result = await generate(maxOutputTokens);
+
+    // Kimi has hit the old 1400 cap with finishReason=length and empty text.
+    // Retry once with a higher budget before failing the stage.
+    if (!result.text.trim() && result.finishReason === "length") {
+      maxOutputTokens = Math.max(maxOutputTokens * 2, 12288);
+      result = await generate(maxOutputTokens);
+    }
+
+    if (!result.text.trim()) {
+      throw new Error(
+        `Model returned empty markdown (finishReason=${result.finishReason}, maxOutputTokens=${maxOutputTokens})`,
+      );
+    }
 
     return {
       role: input.role,
@@ -117,6 +145,7 @@ export async function runAgent(input: AgentRunInput): Promise<AgentRunOutput> {
         model,
         modelTier,
         finishReason: result.finishReason,
+        maxOutputTokens,
         usage: result.usage,
       },
       citations: input.memoryContext
