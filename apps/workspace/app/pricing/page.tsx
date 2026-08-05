@@ -28,7 +28,7 @@ export default function PricingPage() {
       blurb: "Live AI agents via Vercel AI Gateway — requires credits on file.",
       features: [
         "Everything in Live Demo",
-        "Claude Sonnet via AI Gateway",
+        "Routed models: Kimi K2.7 (bulk) + Opus 4.8 (critical)",
         "Honest paywall when credits unavailable",
         "No silent demo fallback",
       ],

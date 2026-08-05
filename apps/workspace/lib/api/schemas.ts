@@ -13,6 +13,11 @@ export const createWorkflowBodySchema = z.object({
   templateId: workflowTemplateIdSchema,
   title: z.string().trim().min(1, "Title required").max(500),
   prompt: z.string().trim().min(1, "Prompt required").max(10_000),
+  /** Optional business/site URL — fetched into sourceContext for grounded research. */
+  url: z
+    .union([z.string().trim().url().max(2048), z.literal("")])
+    .optional()
+    .transform((value) => (value ? value : undefined)),
 });
 
 export const workflowActionBodySchema = z.object({
