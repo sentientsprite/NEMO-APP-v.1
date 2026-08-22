@@ -98,6 +98,30 @@ function ProfileGrid({ profile }: { profile: LeadProfile }) {
           {new Date(profile.fetched_at).toLocaleString()}
         </Field>
       ) : null}
+      {profile.opportunity_score != null ? (
+        <Field label="Opportunity score">{profile.opportunity_score}/100 (higher = weaker presence)</Field>
+      ) : null}
+      <Field label="Organic site: index">
+        {profile.organic?.skipped
+          ? `Skipped (${profile.organic.reason || "no CSE"})`
+          : profile.organic?.site_total_results != null
+            ? `≈ ${profile.organic.site_total_results}${profile.organic.hostname ? ` (${profile.organic.hostname})` : ""}`
+            : "—"}
+      </Field>
+      <Field label="Branded organic">
+        {profile.organic?.skipped
+          ? "Skipped"
+          : profile.organic?.branded_hit == null
+            ? "—"
+            : profile.organic.branded_hit
+              ? `Hit #${profile.organic.branded_rank ?? "?"}`
+              : "Miss (weak brand SERP)"}
+      </Field>
+      {profile.organic?.fetched_at ? (
+        <Field label="Organic checked">
+          {new Date(profile.organic.fetched_at).toLocaleString()}
+        </Field>
+      ) : null}
     </dl>
   );
 }
@@ -114,11 +138,11 @@ export function LeadGbpPanel({ lead }: { lead: OutboundLead }) {
       <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
-            Google / Maps profile
+            Google / Maps + organic
           </h2>
           <p className="mt-1 text-xs text-slate-500">
             {profile
-              ? "Structured GBP fields from Hunter / Places (generate report to refresh)."
+              ? "Weak-presence snapshot: GBP fields plus site:/branded organic when CSE is configured."
               : "No Maps snapshot yet — generate a report if this lead has a Place ID."}
           </p>
         </div>

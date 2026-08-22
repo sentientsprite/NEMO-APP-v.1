@@ -1,3 +1,17 @@
+/** Organic / CSE snapshot nested on outbound_leads.profile */
+export interface LeadOrganicProfile {
+  skipped?: boolean;
+  reason?: string;
+  hostname?: string | null;
+  site_query?: string;
+  site_total_results?: number | null;
+  branded_query?: string;
+  branded_hit?: boolean | null;
+  branded_rank?: number | null;
+  branded_top_links?: string[];
+  fetched_at?: string;
+}
+
 /** Structured Maps / GBP snapshot stored on outbound_leads.profile */
 export interface LeadProfile {
   place_id?: string;
@@ -13,6 +27,8 @@ export interface LeadProfile {
   photo_count?: number | null;
   business_status?: string | null;
   fetched_at?: string;
+  organic?: LeadOrganicProfile | null;
+  opportunity_score?: number | null;
 }
 
 export interface PreCallGap {
@@ -166,6 +182,29 @@ export function buildPreCallGaps(profile: LeadProfile, lead: { email?: string | 
     });
   }
 
+  const organic = profile.organic;
+  if (organic && !organic.skipped) {
+    const siteN = organic.site_total_results;
+    if (typeof siteN === "number" && siteN <= 5) {
+      gaps.push({
+        id: "thin_site_index",
+        severity: siteN === 0 ? "critical" : "warning",
+        title: `Thin organic index (site: ≈ ${siteN})`,
+        talk_track:
+          "Their domain barely shows in Google index — pitch service pages + GBP website fix before ads.",
+      });
+    }
+    if (organic.branded_hit === false) {
+      gaps.push({
+        id: "weak_branded_organic",
+        severity: "critical",
+        title: "Weak branded organic (name + city miss)",
+        talk_track:
+          "Customers searching the business name may not find them first — NAP consistency + citations + on-page brand.",
+      });
+    }
+  }
+
   if (gaps.length === 0) {
     gaps.push({
       id: "strong_surface",
@@ -198,6 +237,19 @@ export function formatPreCallReportMarkdown(input: {
     `- Photos on file: ${profile.photo_count ?? "—"}`,
     `- Types: ${(profile.types ?? []).slice(0, 8).join(", ") || "—"}`,
     `- Maps query: ${profile.maps_query ?? "—"}`,
+    "",
+    "## Organic (Custom Search)",
+    `- site: results: ${profile.organic?.skipped ? `skipped (${profile.organic.reason || "—"})` : (profile.organic?.site_total_results ?? "—")}`,
+    `- Branded: ${
+      profile.organic?.skipped
+        ? "skipped"
+        : profile.organic?.branded_hit == null
+          ? "—"
+          : profile.organic.branded_hit
+            ? `hit #${profile.organic.branded_rank ?? "?"}`
+            : "miss"
+    }`,
+    `- Opportunity score: ${profile.opportunity_score ?? "—"}`,
     "",
     "## Talk-track checklist (gaps)",
   ];
