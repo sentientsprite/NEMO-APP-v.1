@@ -28,8 +28,9 @@ export function RunHunterWorkflowButton() {
         <div>
           <p className="text-sm font-semibold text-indigo-950">Hunter lead sync</p>
           <p className="mt-0.5 text-xs text-indigo-900/80">
-            Runs your server-side automation (GitHub Action or custom webhook). New leads land via the Hunter ingest
-            route, then appear here as <span className="font-medium">new</span>.
+            Runs Hunter Leadfinder (Google Places when the Maps key is on this project) or fixture
+            sync. New leads land via the Hunter ingest route, then appear here as{" "}
+            <span className="font-medium">new</span>.
           </p>
         </div>
         <button
