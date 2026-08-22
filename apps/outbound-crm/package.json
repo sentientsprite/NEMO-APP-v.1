@@ -8,7 +8,8 @@
     "start": "next start --port 3010",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
-    "seed:test-leads": "node scripts/post-test-leads.mjs"
+    "seed:test-leads": "node scripts/post-test-leads.mjs",
+    "ensure-rep-user": "node scripts/ensure-rep-user.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.5.2",

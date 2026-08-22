@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { runHunterSyncInline } from "@/lib/hunter-sync";
 
 export type HunterDispatchResult =
   | { ok: true; message: string }
@@ -9,13 +10,13 @@ export type HunterDispatchResult =
 const DISPATCH_TIMEOUT_MS = 18_000;
 
 /**
- * Rep-only: triggers automation that eventually POSTs leads to /api/webhooks/hunter.
+ * Rep-only: triggers Hunter lead intake.
  *
- * Configure **one** path on the server:
- * - **Webhook (Make/n8n, etc.):** `HUNTER_DISPATCH_WEBHOOK_URL` plus optional
- *   `HUNTER_DISPATCH_WEBHOOK_SECRET` (sent as `Authorization: Bearer`). Your automation
- *   should call GitHub `workflow_dispatch` or run OpenClaw, then POST leads to this app.
- * - **GitHub API (direct):** `HUNTER_GITHUB_DISPATCH_TOKEN` (+ optional repo owner/name/file/ref env).
+ * Order:
+ * 1. Optional Make/n8n: `HUNTER_DISPATCH_WEBHOOK_URL`
+ * 2. Optional GitHub Actions: `HUNTER_GITHUB_DISPATCH_TOKEN`
+ * 3. **Inline (default):** Places Leadfinder when `GOOGLE_PLACES_API_KEY` /
+ *    `GOOGLE_MAPS_API_KEY` is set; otherwise upsert fixtures via the Hunter webhook.
  */
 export async function dispatchHunterLeadWorkflowAction(): Promise<HunterDispatchResult> {
   const supabase = await createClient();
@@ -96,7 +97,7 @@ export async function dispatchHunterLeadWorkflowAction(): Promise<HunterDispatch
         return {
           ok: true,
           message:
-            "GitHub Actions workflow started. Wait 30–60s for jobs to POST fixtures to the Hunter webhook, then refresh.",
+            "GitHub Actions workflow started. Wait 30–60s for jobs to POST to the Hunter webhook, then refresh.",
         };
       }
 
@@ -115,9 +116,13 @@ export async function dispatchHunterLeadWorkflowAction(): Promise<HunterDispatch
     }
   }
 
-  return {
-    ok: false,
-    error:
-      "Hunter is not wired from this deployment. Add HUNTER_DISPATCH_WEBHOOK_URL (automation) or HUNTER_GITHUB_DISPATCH_TOKEN (GitHub API) in Vercel → Environment Variables.",
-  };
+  // Default: run Leadfinder (Places) or fixtures inside this deployment.
+  try {
+    const result = await runHunterSyncInline(8);
+    if (!result.ok) return { ok: false, error: result.error };
+    return { ok: true, message: result.message };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return { ok: false, error: `Inline Hunter sync failed: ${msg}` };
+  }
 }
