@@ -1,6 +1,8 @@
 # Hunter → Outbound CRM
 
-Leads land via `POST /api/webhooks/hunter`. **Google Places is optional** — skip it until you want GCP billing.
+Leads land via `POST /api/webhooks/hunter`.
+
+**ICP (current):** weak Maps + weak organic presence — businesses that are **not** Map Pack / branded-SERP winners. LSA detection is out of scope for now.
 
 ---
 
@@ -37,16 +39,44 @@ If **`nemo-app-v-1`** was mistakenly wired to **`apps/outbound-crm`**, switch th
 
 ---
 
-## Later — GitHub Actions + **Google Places** (needs GCP billing)
+## Weak-presence Leadfinder (Places + Custom Search)
+
+### Inline button (`Run Hunter now` on `/queue`)
+
+Uses [`lib/hunter-sync.ts`](../lib/hunter-sync.ts):
+
+1. Places Text Search (trade + city queries)
+2. Place Details
+3. Optional CSE: `site:{domain}` + `"Business Name" City`
+4. Opportunity score (higher = weaker) → hard-skip strong winners (e.g. ≥150 reviews + website)
+5. POST keepers with `source=hunter_weak_presence` and `profile.organic`
+
+**Vercel env (outbound-crm):**
+
+| Variable | Required | Notes |
+|----------|----------|--------|
+| `GOOGLE_PLACES_API_KEY` or `GOOGLE_MAPS_API_KEY` | Yes for live hunt | Places API |
+| `HUNTER_WEBHOOK_SECRET` | Yes | Same as webhook auth |
+| `OUTBOUND_CRM_PUBLIC_URL` | Recommended | Public CRM origin for self-POST |
+| `GOOGLE_CSE_CX` | For organic | Programmable Search Engine ID (**Search the entire web**) |
+| `GOOGLE_CSE_API_KEY` | Optional | Falls back to Places key |
+
+**CSE setup:** [Programmable Search Engine](https://programmablesearchengine.google.com/) → create → **Search the entire web** → copy CX → enable **Custom Search API** on the GCP key.
+
+Without `GOOGLE_CSE_CX`, Hunter still prefers weak Maps (no website / low reviews / missing hours) but skips `site:` / branded checks.
+
+### GitHub Actions daily
 
 Workflow: **[`.github/workflows/hunter-daily-outbound-crm.yml`](../../../.github/workflows/hunter-daily-outbound-crm.yml)**  
-Script: **`scripts/hunter-daily-crm-sync.mjs`** — Maps-style discovery + ranking. Requires **`GOOGLE_PLACES_API_KEY`** plus the two webhook secrets above.
+Script: **`scripts/hunter-daily-crm-sync.mjs`** — same weak-presence ranking; source `hunter_weak_presence_daily`.
 
-Queries: **`scripts/hunter-search-queries.json`**. Tunable: **`MIN_USER_RATINGS_TOTAL`**, **`MIN_RATING`**, **`POOL_MULTIPLIER`**, **`MAX_LEADS`**.
+Queries: **`scripts/hunter-search-queries.json`**.
+
+Tunable env: `MAX_LEADS`, `STRONG_REVIEW_HARD_SKIP` (default 150), `MIN_OPPORTUNITY` (default 35), `POOL_MULTIPLIER`, `GOOGLE_CSE_CX`.
 
 ### OpenClaw Hunter vs Places script
 
-The **OpenClaw gateway** is on GitHub (`sentientsprite/openclaw`), but Hunter’s **Maps/PinchTab** workflows usually live under **`~/.openclaw/`** on your Mac Mini. This Places script mirrors **BUSINESS_PLAN.md** until the Mini POSTs webhooks directly.
+The **OpenClaw gateway** is on GitHub (`sentientsprite/openclaw`), but Hunter’s **Maps/PinchTab** workflows usually live under **`~/.openclaw/`** on your Mac Mini. Align Mini POSTs to the same weak-presence ICP when possible.
 
 **Optional snapshot from Mini:**
 
@@ -56,7 +86,7 @@ rsync -az --exclude '**/secrets/**' user@mini:~/.openclaw/workspace/ ./openclaw-
 
 Default cron: **14:15 UTC daily** — edit the workflow to pause until Places billing is on.
 
-Leads from Places use **`external_id`** `google_place:<place_id>` and **`source`** `hunter_openclaw_aligned_daily`.
+Leads use **`external_id`** `google_place:<place_id>`.
 
 ---
 
@@ -66,12 +96,14 @@ Leads from Places use **`external_id`** `google_place:<place_id>` and **`source`
 2. **POST** each lead (cap per day in agent logic) to `OUTBOUND_CRM_WEBHOOK_URL` with **`Authorization: Bearer HUNTER_WEBHOOK_SECRET`**.
 3. Disable duplicate automation (Places cron and/or fixture workflow) if needed.
 
-Webhook fields: **`README.md`** (Hunter webhook section).
+Webhook fields: **`README.md`** (Hunter webhook section). Prefer posting `profile` with website URL + organic fields when available.
 
 ---
 
 ## Operational checks
 
-- Queue **`status=new`** shows new rows. Fixture seeds use **`source`** like `hunter_monday` / `hunter_csv_import`; Places runs use **`hunter_openclaw_aligned_daily`**.
+- Queue **`status=new`** shows new rows. Weak-presence runs use **`hunter_weak_presence`** / **`hunter_weak_presence_daily`**.
+- Expect **low reviews / no website / thin site:** — not 4.8★ / thousands of reviews.
 - **`503` / `401`** → wrong Vercel env or bearer secret.
 - **`Missing GOOGLE_PLACES_API_KEY`** on **Hunter daily** workflow → expected until billing; use **fixture** workflow instead.
+- CSE errors → check Custom Search API enabled + CX is entire-web.
