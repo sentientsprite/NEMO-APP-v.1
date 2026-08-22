@@ -15,6 +15,7 @@ interface HunterBody {
   source: string;
   notes?: string;
   external_id?: string;
+  profile?: Record<string, unknown>;
 }
 
 function isRecord(v: unknown): v is Record<string, unknown> {
@@ -60,6 +61,10 @@ export async function POST(request: Request) {
   const email = typeof body.email === "string" ? body.email.trim() : undefined;
   const notes = typeof body.notes === "string" ? body.notes.trim() : undefined;
   const external_id = typeof body.external_id === "string" ? body.external_id.trim() : undefined;
+  const profile =
+    typeof body.profile === "object" && body.profile !== null && !Array.isArray(body.profile)
+      ? (body.profile as Record<string, unknown>)
+      : undefined;
 
   const isLvsWedge = source === "lvs_wedge";
   const isSpryteAudit = source === "spryte_audit";
@@ -103,6 +108,7 @@ export async function POST(request: Request) {
       email: email ?? null,
       source,
       notes: notes ?? null,
+      ...(profile ? { profile } : {}),
     };
 
     const { data, error } = await admin
@@ -145,6 +151,7 @@ export async function POST(request: Request) {
       source,
       notes: notes ?? null,
       external_id: null,
+      ...(profile ? { profile } : {}),
     })
     .select("id")
     .single();

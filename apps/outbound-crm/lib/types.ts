@@ -29,6 +29,8 @@ export interface OutboundLead {
   priority: number | null;
   assigned_to: string | null;
   notes: string | null;
+  /** Structured Maps/GBP snapshot when Hunter Leadfinder stored one. */
+  profile?: Record<string, unknown> | null;
   created_at: string;
   updated_at: string;
 }
@@ -36,7 +38,7 @@ export interface OutboundLead {
 export interface OutboundActivity {
   id: string;
   lead_id: string;
-  type: "call_attempt" | "note" | "status_change";
+  type: "call_attempt" | "note" | "status_change" | "pre_call_report";
   note: string | null;
   meta: Record<string, unknown>;
   created_at: string;

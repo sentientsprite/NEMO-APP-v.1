@@ -6,6 +6,7 @@ import {
   logCallAttemptForm,
   updateLeadStatusForm,
 } from "@/app/actions/leads";
+import { LeadGbpPanel } from "@/components/LeadGbpPanel";
 import { createClient } from "@/lib/supabase/server";
 import type { OutboundActivity, OutboundLead } from "@/lib/types";
 import { LEAD_STATUSES } from "@/lib/types";
@@ -32,6 +33,7 @@ export default async function LeadDetailPage({ params }: PageProps) {
     .order("created_at", { ascending: false });
 
   const log = (activities ?? []) as OutboundActivity[];
+  const latestReport = log.find((a) => a.type === "pre_call_report");
 
   const mailto = row.email
     ? `mailto:${encodeURIComponent(row.email)}?subject=${encodeURIComponent(`Prana — ${row.name}`)}`
@@ -51,17 +53,24 @@ export default async function LeadDetailPage({ params }: PageProps) {
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold text-slate-900">{row.name}</h1>
-            {row.company ? <p className="text-slate-600">{row.company}</p> : null}
+            {row.company && row.company !== row.name ? (
+              <p className="text-slate-600">{row.company}</p>
+            ) : null}
             <p className="mt-2 text-sm text-slate-500">
               <span className="font-semibold text-slate-700">{row.status}</span>
               {row.source ? ` · ${row.source}` : null}
+              {row.external_id ? (
+                <span className="mt-1 block font-mono text-xs text-slate-400">{row.external_id}</span>
+              ) : null}
             </p>
             <p className="mt-1 font-mono text-lg text-slate-800">{row.phone}</p>
-            {row.notes ? <p className="mt-3 whitespace-pre-wrap text-sm text-slate-700">{row.notes}</p> : null}
+            {row.email ? <p className="mt-1 text-sm text-slate-700">{row.email}</p> : null}
           </div>
           <div className="flex flex-col gap-2 sm:items-end">
             {emailOnly ? (
-              <p className="rounded-xl bg-violet-50 px-4 py-2 text-sm font-semibold text-violet-800">Email-first LVS lead</p>
+              <p className="rounded-xl bg-violet-50 px-4 py-2 text-sm font-semibold text-violet-800">
+                Email-first LVS lead
+              </p>
             ) : (
               <a
                 href={telHref(row.phone_normalized)}
@@ -81,6 +90,17 @@ export default async function LeadDetailPage({ params }: PageProps) {
           </div>
         </div>
       </div>
+
+      <LeadGbpPanel lead={row} />
+
+      {latestReport?.note ? (
+        <section className="rounded-2xl border border-amber-200 bg-amber-50/60 p-4 shadow-sm">
+          <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-amber-900">
+            Latest pre-call report
+          </h2>
+          <pre className="whitespace-pre-wrap font-sans text-sm text-slate-800">{latestReport.note}</pre>
+        </section>
+      ) : null}
 
       <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">Log call</h2>
@@ -156,7 +176,15 @@ export default async function LeadDetailPage({ params }: PageProps) {
                   <span className="font-mono">{a.type}</span>
                   <span>{new Date(a.created_at).toLocaleString()}</span>
                 </div>
-                {a.note ? <p className="mt-1 text-slate-800">{a.note}</p> : null}
+                {a.note ? (
+                  <pre
+                    className={`mt-1 whitespace-pre-wrap font-sans text-slate-800 ${
+                      a.type === "pre_call_report" ? "max-h-64 overflow-auto text-xs" : ""
+                    }`}
+                  >
+                    {a.note}
+                  </pre>
+                ) : null}
                 {a.type === "status_change" && a.meta && "from" in a.meta && "to" in a.meta ? (
                   <p className="mt-1 text-slate-600">
                     {String(a.meta.from)} → {String(a.meta.to)}

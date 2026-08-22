@@ -6,6 +6,8 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
+import { fetchPlaceDetails, placeDetailsToProfile, placesApiKey } from "@/lib/places";
+
 export type HunterSyncResult =
   | { ok: true; mode: "places" | "fixtures"; posted: number; message: string }
   | { ok: false; error: string };
@@ -18,6 +20,21 @@ type LeadBody = {
   email?: string;
   notes?: string;
   external_id?: string;
+  profile?: {
+    place_id?: string;
+    website?: string | null;
+    maps_url?: string | null;
+    address?: string | null;
+    rating?: number | null;
+    review_count?: number | null;
+    types?: string[];
+    maps_query?: string | null;
+    hours_open_now?: boolean | null;
+    has_hours?: boolean | null;
+    photo_count?: number | null;
+    business_status?: string | null;
+    fetched_at?: string;
+  };
 };
 
 const DEFAULT_QUERIES = [
@@ -29,11 +46,7 @@ const DEFAULT_QUERIES = [
 ];
 
 function placesKey(): string {
-  return (
-    process.env.GOOGLE_PLACES_API_KEY?.trim() ||
-    process.env.GOOGLE_MAPS_API_KEY?.trim() ||
-    ""
-  );
+  return placesApiKey();
 }
 
 function webhookSecret(): string {
@@ -85,33 +98,6 @@ async function textSearch(key: string, query: string): Promise<Array<{ place_id?
   return data.results || [];
 }
 
-async function placeDetails(key: string, placeId: string) {
-  const u = new URL("https://maps.googleapis.com/maps/api/place/details/json");
-  u.searchParams.set("place_id", placeId);
-  u.searchParams.set(
-    "fields",
-    "name,formatted_phone_number,formatted_address,business_status,place_id,rating,user_ratings_total,website,types",
-  );
-  u.searchParams.set("key", key);
-  const res = await fetch(u, { signal: AbortSignal.timeout(10_000) });
-  const data = (await res.json()) as {
-    status: string;
-    result?: {
-      name?: string;
-      formatted_phone_number?: string;
-      formatted_address?: string;
-      business_status?: string;
-      place_id?: string;
-      rating?: number;
-      user_ratings_total?: number;
-      website?: string;
-      types?: string[];
-    };
-  };
-  if (data.status !== "OK" || !data.result) return null;
-  return data.result;
-}
-
 async function runPlacesSync(maxLeads: number): Promise<HunterSyncResult> {
   const key = placesKey();
   const secret = webhookSecret();
@@ -143,16 +129,26 @@ async function runPlacesSync(maxLeads: number): Promise<HunterSyncResult> {
   let posted = 0;
   for (const c of candidates) {
     if (posted >= maxLeads) break;
-    const det = await placeDetails(key, c.placeId);
+    let det: Awaited<ReturnType<typeof fetchPlaceDetails>>;
+    try {
+      det = await fetchPlaceDetails(c.placeId);
+    } catch {
+      continue;
+    }
     if (!det || det.business_status === "CLOSED_PERMANENTLY") continue;
     const phone = det.formatted_phone_number?.trim();
     if (!phone) continue;
     const reviews = det.user_ratings_total ?? 0;
-    const rating = typeof det.rating === "number" ? det.rating : 0;
+    const ratingNum = typeof det.rating === "number" ? det.rating : 0;
     if (reviews < 8) continue;
-    if (rating > 0 && rating < 3.5) continue;
+    if (ratingNum > 0 && ratingNum < 3.5) continue;
 
     const name = (det.name || "Unknown").trim();
+    const profile = placeDetailsToProfile(det, { maps_query: c.query });
+    const website = profile.website;
+    const mapsUrl = profile.maps_url;
+    const rating = profile.rating;
+
     const { ok, status } = await postLead({
       name,
       company: name,
@@ -160,14 +156,16 @@ async function runPlacesSync(maxLeads: number): Promise<HunterSyncResult> {
       source: "hunter_leadfinder_button",
       external_id: `google_place:${det.place_id || c.placeId}`,
       notes: [
-        `Reviews: ${reviews} · Rating: ${rating || "n/a"}`,
-        det.website ? "Website: yes" : "Website: no",
+        `Reviews: ${reviews} · Rating: ${rating ?? "n/a"}`,
+        website ? `Website: ${website}` : "Website: no",
+        mapsUrl ? `Maps: ${mapsUrl}` : null,
         `Maps query: ${c.query}`,
         det.formatted_address ? `Address: ${det.formatted_address}` : null,
         "Pipeline: outbound-crm Run Hunter now (inline Places)",
       ]
         .filter(Boolean)
         .join(" · "),
+      profile,
     });
     if (ok) posted++;
     else if (status === 401) {
