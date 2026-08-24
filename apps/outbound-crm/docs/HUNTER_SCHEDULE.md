@@ -45,14 +45,13 @@ If **`nemo-app-v-1`** was mistakenly wired to **`apps/outbound-crm`**, switch th
 
 Calls **`POST /api/hunter/run`** (`maxDuration` 60s) → [`lib/hunter-sync.ts`](../lib/hunter-sync.ts) + [`lib/weak-presence.ts`](../lib/weak-presence.ts):
 
-1. Places Text Search (3 trade+city queries, capped pool)
-2. Place Details
-3. **Maps prefilter** — hard-skip website+≥25 reviews (no SERP) / website+≥40 always
-4. Optional SERP on survivors: `site:` + branded
-5. Keep only **estimated grade C / D / F** with **≥2 sellable packages** (GBP, photos, SMS review funnel, website, SEO/GEO/AEO, …)
-6. POST keepers (`source=hunter_weak_presence`) with `Grade:` + `Packages:` in notes
+1. Places Text Search → Place Details
+2. Maps prefilter (skip obvious winners before Serper spend)
+3. **Required SERP** (Serper): `site:` + branded name+city + **category** (Maps query)
+4. Keep only when SERP proves a miss (category / branded / broken site index) **and** grade C/D/F
+5. Map 1:1 packages (GBP, photos, SMS review funnel, website, SEO/SEM/GEO/AEO, …) → POST keepers
 
-If the button still times out, use the GitHub daily workflow (no Vercel request limit).
+Hard-skip when branded **and** category both hit (they are already producing organic results).
 
 **Vercel env (outbound-crm):**
 
@@ -92,11 +91,9 @@ gh secret set SERPER_API_KEY -R sentientsprite/NEMO-APP-v.1
 
 Queries: **`scripts/hunter-search-queries.json`**.
 
-Tunable env: `MAX_LEADS`, `STRONG_REVIEW_HARD_SKIP` (default **45**), `STRONG_REVIEW_HARD_SKIP_NO_CSE` (default **32**), `MIN_OPPORTUNITY` (default **40**), `MIN_PACKAGE_GAPS` (default **2**), `LOW_C_VISIBILITY_MAX` (default **72**), `POOL_MULTIPLIER`.
+Tunable env: `MAX_LEADS`, `STRONG_REVIEW_HARD_SKIP` (default **40**), `STRONG_REVIEW_HARD_SKIP_NO_CSE` (default **25**), `MIN_OPPORTUNITY` (default **45**), `THIN_SITE_INDEX_MAX` (default **3**), `POOL_MULTIPLIER`.
 
-**Keep rule:** estimated grade **C / D / F**. Prefer ≥2 package gaps; **low-C** (visibility ≤72) or D/F may keep with **1 critical** package. Hard-skip website+≥45 reviews; without working SERP, website+≥32 reviews.
-
-**Serper health:** signed-in `GET /api/hunter/serp-health` — must return `{ ok: true }`. A 403 from Serper means the Production `SERPER_API_KEY` is invalid; create a new key at [serper.dev](https://serper.dev), set it on Vercel, redeploy.
+**Keep rule (SERP-first):** live Serper required. Keep only if **category miss**, **branded miss**, or **site index ≤3**, plus grade **C/D/F** and at least one mapped package. Reviews alone are not enough.
 
 ### OpenClaw Hunter vs Places script
 

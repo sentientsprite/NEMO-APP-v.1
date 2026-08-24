@@ -22,6 +22,10 @@ export type OrganicFootprint = {
   branded_hit?: boolean | null;
   branded_rank?: number | null;
   branded_top_links?: string[];
+  /** Trade + city (or Maps) query — do they show in organic for the service category? */
+  category_query?: string;
+  category_hit?: boolean | null;
+  category_rank?: number | null;
   fetched_at?: string;
 };
 
@@ -190,10 +194,42 @@ export async function serpSearch(query: string, num = 5): Promise<SerpSearchResu
   throw new Error("No SERP key (set SERPER_API_KEY or SERPAPI_API_KEY)");
 }
 
+function rankBusinessInResults(
+  items: SerpHit[],
+  opts: { hostname: string | null; businessName: string },
+): number | null {
+  const hostname = opts.hostname;
+  if (hostname) {
+    for (let i = 0; i < items.length; i++) {
+      const host = hostnameFromUrl(items[i]!.link);
+      if (host && (host === hostname || host.endsWith(`.${hostname}`) || hostname.endsWith(`.${host}`))) {
+        return i + 1;
+      }
+    }
+  }
+  const nameTokens = opts.businessName
+    .toLowerCase()
+    .replace(/"/g, "")
+    .split(/\s+/)
+    .filter((t) => t.length > 2)
+    .slice(0, 3);
+  if (!nameTokens.length) return null;
+  for (let i = 0; i < items.length; i++) {
+    const title = (items[i]!.title || "").toLowerCase();
+    const link = (items[i]!.link || "").toLowerCase();
+    if (nameTokens.every((t) => title.includes(t) || link.includes(t))) {
+      return i + 1;
+    }
+  }
+  return null;
+}
+
 export async function organicFootprint(input: {
   website?: string | null;
   businessName: string;
   city: string;
+  /** Maps / trade query used to test category organic presence. */
+  categoryQuery?: string | null;
 }): Promise<OrganicFootprint> {
   const fetched_at = new Date().toISOString();
 
@@ -206,6 +242,7 @@ export async function organicFootprint(input: {
   }
 
   const hostname = hostnameFromUrl(input.website);
+  const safeName = input.businessName.replace(/"/g, "").trim();
   const out: OrganicFootprint = {
     skipped: false,
     hostname,
@@ -223,39 +260,27 @@ export async function organicFootprint(input: {
       out.site_query = undefined;
     }
 
-    const safeName = input.businessName.replace(/"/g, "").trim();
     out.branded_query = `"${safeName}" ${input.city}`.trim();
     const branded = await serpSearch(out.branded_query, 8);
     out.provider = branded.provider;
     out.branded_top_links = branded.items.map((i) => i.link);
+    out.branded_rank = rankBusinessInResults(branded.items, {
+      hostname,
+      businessName: safeName,
+    });
+    out.branded_hit = out.branded_rank != null;
 
-    let rank: number | null = null;
-    if (hostname) {
-      for (let i = 0; i < branded.items.length; i++) {
-        const host = hostnameFromUrl(branded.items[i]!.link);
-        if (host && (host === hostname || host.endsWith(`.${hostname}`) || hostname.endsWith(`.${host}`))) {
-          rank = i + 1;
-          break;
-        }
-      }
+    const categoryQuery = (input.categoryQuery || "").trim();
+    if (categoryQuery) {
+      out.category_query = categoryQuery;
+      const category = await serpSearch(categoryQuery, 10);
+      out.provider = category.provider;
+      out.category_rank = rankBusinessInResults(category.items, {
+        hostname,
+        businessName: safeName,
+      });
+      out.category_hit = out.category_rank != null;
     }
-    if (rank == null) {
-      const nameTokens = safeName
-        .toLowerCase()
-        .split(/\s+/)
-        .filter((t) => t.length > 2)
-        .slice(0, 3);
-      for (let i = 0; i < branded.items.length; i++) {
-        const title = (branded.items[i]!.title || "").toLowerCase();
-        if (nameTokens.length && nameTokens.every((t) => title.includes(t))) {
-          rank = i + 1;
-          break;
-        }
-      }
-    }
-
-    out.branded_rank = rank;
-    out.branded_hit = rank != null;
   } catch (e) {
     return {
       skipped: true,

@@ -2,22 +2,19 @@
 /**
  * Weak-presence Hunter → Outbound CRM (GitHub Actions).
  *
- * ICP: estimated grade C/D/F with ≥2 sellable package gaps (not B / Map Pack).
- * Pipeline: Places Text Search → Details → optional SERP (site: + branded)
- * → grade + packages → POST top N.
+ * ICP: SERP-first — category/branded/site miss + grade C/D/F + 1:1 packages.
+ * Pipeline: Places → Details → SERP (site + branded + category) → POST top N.
  *
  * Env:
  *   GOOGLE_PLACES_API_KEY      — Places API
  *   OUTBOUND_CRM_WEBHOOK_URL   — https://…/api/webhooks/hunter
  *   HUNTER_WEBHOOK_SECRET      — Bearer secret (match Vercel)
- *   SERPER_API_KEY             — preferred SERP (serper.dev)
- *   SERPAPI_API_KEY            — optional fallback (serpapi.com)
+ *   SERPER_API_KEY             — required (serper.dev)
+ *   SERPAPI_API_KEY            — optional fallback
  *   MAX_LEADS                  — optional, default 10
- *   MAX_USER_RATINGS_TOTAL     — soft prefer under this (default 80); hard-skip ≥ STRONG
- *   STRONG_REVIEW_HARD_SKIP    — default 40 (website + reviews → skip)
- *   STRONG_REVIEW_HARD_SKIP_NO_CSE — default 25 when organic skipped
- *   MIN_OPPORTUNITY            — default 50
- *   MIN_PACKAGE_GAPS           — default 2
+ *   STRONG_REVIEW_HARD_SKIP    — default 40
+ *   STRONG_REVIEW_HARD_SKIP_NO_CSE — default 25
+ *   MIN_OPPORTUNITY            — default 45
  *   POOL_MULTIPLIER            — default 6
  *   HUNTER_SEARCH_QUERIES_PATH — optional JSON array of query strings
  */
@@ -35,23 +32,17 @@ const SERPAPI_KEY = process.env.SERPAPI_API_KEY?.trim() || "";
 const MAX_LEADS = Math.min(50, Math.max(1, parseInt(process.env.MAX_LEADS || "10", 10) || 10));
 const STRONG_REVIEW_HARD_SKIP = Math.max(
   20,
-  parseInt(process.env.STRONG_REVIEW_HARD_SKIP || "45", 10) || 45,
+  parseInt(process.env.STRONG_REVIEW_HARD_SKIP || "40", 10) || 40,
 );
-/** When SERP is skipped, hard-skip website + reviews at/above this. */
 const STRONG_REVIEW_HARD_SKIP_NO_CSE = Math.max(
   15,
-  parseInt(process.env.STRONG_REVIEW_HARD_SKIP_NO_CSE || "32", 10) || 32,
+  parseInt(process.env.STRONG_REVIEW_HARD_SKIP_NO_CSE || "25", 10) || 25,
 );
-const MIN_OPPORTUNITY = Math.max(0, parseInt(process.env.MIN_OPPORTUNITY || "40", 10) || 40);
-const MIN_PACKAGE_GAPS = Math.max(1, parseInt(process.env.MIN_PACKAGE_GAPS || "2", 10) || 2);
-const LOW_C_VISIBILITY_MAX = Math.max(
-  50,
-  parseInt(process.env.LOW_C_VISIBILITY_MAX || "72", 10) || 72,
-);
+const MIN_OPPORTUNITY = Math.max(0, parseInt(process.env.MIN_OPPORTUNITY || "45", 10) || 45);
 const POOL_MULTIPLIER = Math.min(12, Math.max(2, parseInt(process.env.POOL_MULTIPLIER || "6", 10) || 6));
-const THIN_SITE_MAX = 8;
-const WEAK_REVIEW_CRITICAL = 15;
-const WEAK_REVIEW_SOFT = 30;
+const THIN_SITE_MAX = 3;
+const WEAK_REVIEW_CRITICAL = 12;
+const WEAK_REVIEW_SOFT = 25;
 
 const DETAIL_FIELDS = [
   "name",
@@ -79,6 +70,7 @@ function fail(msg) {
 if (!KEY) fail("Missing GOOGLE_PLACES_API_KEY");
 if (!WEBHOOK) fail("Missing OUTBOUND_CRM_WEBHOOK_URL");
 if (!SECRET) fail("Missing HUNTER_WEBHOOK_SECRET");
+if (!SERPER_KEY && !SERPAPI_KEY) fail("Missing SERPER_API_KEY (SERP-first Hunter requires Serper)");
 
 let queries;
 try {
@@ -147,7 +139,7 @@ async function serpSearch(q, num = 5) {
   return null;
 }
 
-async function fetchOrganic(name, website, city) {
+async function fetchOrganic(name, website, city, categoryQuery) {
   const fetched_at = new Date().toISOString();
   if (!SERPER_KEY && !SERPAPI_KEY) {
     return { skipped: true, reason: "SERPER_API_KEY not set", fetched_at };
@@ -178,6 +170,37 @@ async function fetchOrganic(name, website, city) {
     }
     out.branded_rank = rank;
     out.branded_hit = rank != null;
+
+    if (categoryQuery?.trim()) {
+      out.category_query = categoryQuery.trim();
+      const category = await serpSearch(out.category_query, 10);
+      let cRank = null;
+      if (hostname) {
+        for (let i = 0; i < (category?.items || []).length; i++) {
+          const host = hostnameFromUrl(category.items[i].link);
+          if (host && (host === hostname || host.endsWith(`.${hostname}`))) {
+            cRank = i + 1;
+            break;
+          }
+        }
+      }
+      if (cRank == null) {
+        const tokens = safeName
+          .toLowerCase()
+          .split(/\s+/)
+          .filter((t) => t.length > 2)
+          .slice(0, 3);
+        for (let i = 0; i < (category?.items || []).length; i++) {
+          const title = (category.items[i].title || "").toLowerCase();
+          if (tokens.length && tokens.every((t) => title.includes(t))) {
+            cRank = i + 1;
+            break;
+          }
+        }
+      }
+      out.category_rank = cRank;
+      out.category_hit = cRank != null;
+    }
   } catch (e) {
     return { skipped: true, reason: e instanceof Error ? e.message : String(e), hostname, fetched_at };
   }
@@ -207,7 +230,10 @@ function listPackages(det, organic) {
   if (organic && !organic.skipped) {
     const siteN = organic.site_total_results;
     const thin = website && typeof siteN === "number" && siteN <= THIN_SITE_MAX;
-    if (thin || organic.branded_hit === false) packages.push("local_seo_sem_geo_aeo");
+    if (thin) packages.push("website_build_or_fix");
+    if (thin || organic.branded_hit === false || organic.category_hit === false) {
+      packages.push("local_seo_sem_geo_aeo");
+    }
     if (organic.branded_hit === false && reviews < WEAK_REVIEW_SOFT) packages.push("social_presence");
   }
 
@@ -331,42 +357,45 @@ function hardSkip(det, organic) {
 
   if (website && reviews >= STRONG_REVIEW_HARD_SKIP) return true;
   if (cseUnavailable && website && reviews >= STRONG_REVIEW_HARD_SKIP_NO_CSE) return true;
-  if (
-    !cseUnavailable &&
-    website &&
-    reviews >= STRONG_REVIEW_HARD_SKIP_NO_CSE &&
-    organic.branded_hit === true &&
-    (organic.branded_rank ?? 1) <= 3
-  ) {
-    return true;
+  if (!cseUnavailable) {
+    if (organic.branded_hit === true && organic.category_hit === true) return true;
+    if (
+      website &&
+      reviews >= 8 &&
+      organic.branded_hit === true &&
+      (organic.branded_rank ?? 1) <= 3 &&
+      organic.category_hit !== false
+    ) {
+      return true;
+    }
   }
-  if (
-    !cseUnavailable &&
-    website &&
-    reviews >= STRONG_REVIEW_HARD_SKIP_NO_CSE &&
-    typeof organic.site_total_results === "number" &&
-    organic.site_total_results > 40
-  ) {
+  return false;
+}
+
+function hasSerpFailure(det, organic) {
+  if (!organic || organic.skipped) return false;
+  if (!det.website?.trim()) return true;
+  if (organic.category_hit === false) return true;
+  if (organic.branded_hit === false) return true;
+  if (typeof organic.site_total_results === "number" && organic.site_total_results <= THIN_SITE_MAX) {
     return true;
   }
   return false;
 }
 
-function shouldKeep(breakdown) {
+function shouldKeep(breakdown, det, organic) {
+  if (!organic || organic.skipped) return false;
   if (!["C", "D", "F"].includes(breakdown.grade)) return false;
-  const criticalish = (breakdown.packages || []).some((id) =>
-    ["gbp_management", "review_sms_funnel", "website_build_or_fix", "local_seo_sem_geo_aeo"].includes(
-      id,
-    ),
-  );
-  const lowC =
-    breakdown.visibility <= LOW_C_VISIBILITY_MAX ||
-    breakdown.grade === "D" ||
-    breakdown.grade === "F";
-  const packagesOk =
-    (breakdown.packages?.length || 0) >= MIN_PACKAGE_GAPS || (lowC && criticalish);
-  if (!packagesOk) return false;
-  if (breakdown.total < MIN_OPPORTUNITY && !breakdown.critical && !lowC) return false;
+  if (!hasSerpFailure(det, organic)) return false;
+  if ((breakdown.packages?.length || 0) < 1) return false;
+  if (
+    breakdown.total < MIN_OPPORTUNITY &&
+    !breakdown.critical &&
+    organic.category_hit !== false &&
+    organic.branded_hit !== false
+  ) {
+    return false;
+  }
   return true;
 }
 
@@ -457,13 +486,13 @@ for (const { hit, query } of staged) {
 
   const name = (det.name || hit.name || "Unknown").trim();
   const city = cityHint(det.formatted_address, query);
-  const organic = await fetchOrganic(name, det.website, city);
+  const organic = await fetchOrganic(name, det.website, city, query);
   await new Promise((r) => setTimeout(r, 180));
 
   if (hardSkip(det, organic)) continue;
 
   const breakdown = scoreOpportunity(det, organic);
-  if (!shouldKeep(breakdown)) continue;
+  if (!shouldKeep(breakdown, det, organic)) continue;
 
   enriched.push({
     hit,
@@ -481,7 +510,7 @@ enriched.sort((a, b) => b.score - a.score);
 const winners = enriched.slice(0, MAX_LEADS);
 
 console.log(
-  `C-and-below: ${enriched.length} keepers from ${staged.length} staged; posting top ${winners.length} (SERP=${Boolean(SERPER_KEY || SERPAPI_KEY)}).`,
+  `SERP-first: ${enriched.length} keepers from ${staged.length} staged; posting top ${winners.length}.`,
 );
 
 const posted = [];
@@ -503,6 +532,12 @@ for (let i = 0; i < winners.length; i++) {
       ? `Organic: skipped (${organic.reason || "no SERP"})`
       : `Organic: site≈${organic.site_total_results ?? "n/a"} · branded: ${
           organic.branded_hit ? `hit#${organic.branded_rank}` : "miss"
+        } · category: ${
+          organic.category_hit == null
+            ? "n/a"
+            : organic.category_hit
+              ? `hit#${organic.category_rank}`
+              : "miss"
         }`;
 
   const profile = {

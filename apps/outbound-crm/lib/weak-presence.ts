@@ -10,24 +10,25 @@ import type { OrganicFootprint } from "@/lib/custom-search";
 import type { LeadProfile } from "@/lib/lead-profile";
 
 /** Soft prefer under this review count when scoring. */
-export const WEAK_REVIEW_SOFT_MAX = 30;
+export const WEAK_REVIEW_SOFT_MAX = 25;
 /** Critical review gap (SMS review-funnel package). */
-export const WEAK_REVIEW_CRITICAL = 15;
-/**
- * Website + this many reviews → hard skip (B / strong C+ surface).
- */
-export const STRONG_REVIEW_HARD_SKIP = 45;
+export const WEAK_REVIEW_CRITICAL = 12;
+/** Website + this many reviews → hard skip (B / Map Pack surface). */
+export const STRONG_REVIEW_HARD_SKIP = 40;
 /** Without organic proof, website + this many reviews → hard skip. */
-export const STRONG_REVIEW_HARD_SKIP_NO_CSE = 32;
+export const STRONG_REVIEW_HARD_SKIP_NO_CSE = 25;
 /** @deprecated alias */
 export const STRONG_REVIEW_HARD_SKIP_NO_ORGANIC = STRONG_REVIEW_HARD_SKIP_NO_CSE;
-/** site: totalResults at or below this = thin index (SEO / site package). */
-export const THIN_SITE_INDEX_MAX = 8;
-/** Min opportunity when no critical Maps gap. */
-export const MIN_OPPORTUNITY_KEEP = 40;
-/** Prefer ≥2 packages; low-C / D / F may keep with 1 critical package. */
-export const MIN_PACKAGE_GAPS = 2;
-/** Visibility at or below this = "low C" (or weaker) — allow 1 critical package. */
+/**
+ * site: results at or below this = broken index (website package via SERP).
+ * Mild thin (e.g. 5) alone is not enough if branded + category both hit.
+ */
+export const THIN_SITE_INDEX_MAX = 3;
+/** Min opportunity when keep path has no critical Maps stack. */
+export const MIN_OPPORTUNITY_KEEP = 45;
+/** Prefer ≥1 SERP-proven package pitch (1:1 service). */
+export const MIN_PACKAGE_GAPS = 1;
+/** @deprecated low-C loophole removed — SERP proof required instead. */
 export const LOW_C_VISIBILITY_MAX = 72;
 
 /** LVS-aligned letter grades (visibility score, not opportunity). */
@@ -81,8 +82,8 @@ export function isCOrBelow(grade: ProspectGrade): boolean {
 }
 
 /**
- * Infer sellable packages from Maps + organic gaps.
- * These drive keep/skip — one weak signal is not enough.
+ * Infer sellable 1:1 Nemo packages from GBP + SERP gaps.
+ * SERP category / branded / site misses drive SEO·SEM·GEO·AEO and website pitches.
  */
 export function listServicePackageGaps(
   profile: Pick<
@@ -99,7 +100,7 @@ export function listServicePackageGaps(
   if (profile.has_hours === false) {
     packages.push({
       id: "gbp_management",
-      label: "GBP / hours & listing completeness",
+      label: "GBP management (hours / listing completeness)",
       severity: "critical",
     });
   }
@@ -107,7 +108,7 @@ export function listServicePackageGaps(
   if (photos < 3) {
     packages.push({
       id: "photo_management",
-      label: "Photo / listing media management",
+      label: "Photo & listing media management",
       severity: photos === 0 ? "critical" : "warning",
     });
   }
@@ -136,19 +137,27 @@ export function listServicePackageGaps(
 
   if (organic && !organic.skipped) {
     const siteN = organic.site_total_results;
-    const thinSite =
+    const siteBroken =
       website && typeof siteN === "number" && siteN <= THIN_SITE_INDEX_MAX;
     const brandedMiss = organic.branded_hit === false;
+    const categoryMiss = organic.category_hit === false;
 
-    if (thinSite || brandedMiss || (website && siteN === 0)) {
+    if (siteBroken) {
       packages.push({
-        id: "local_seo_sem_geo_aeo",
-        label: "SEO / SEM / GEO / AEO + site authority",
-        severity: brandedMiss || siteN === 0 ? "critical" : "warning",
+        id: "website_build_or_fix",
+        label: "Website index / plugin & SEO foundations",
+        severity: siteN === 0 ? "critical" : "warning",
       });
     }
 
-    // Name+city miss with almost no social/citation footprint → soft social package.
+    if (categoryMiss || brandedMiss || siteBroken) {
+      packages.push({
+        id: "local_seo_sem_geo_aeo",
+        label: "SEO / SEM / GEO / AEO (category & organic presence)",
+        severity: categoryMiss || brandedMiss ? "critical" : "warning",
+      });
+    }
+
     if (brandedMiss && reviews < WEAK_REVIEW_SOFT_MAX) {
       packages.push({
         id: "social_presence",
@@ -158,7 +167,7 @@ export function listServicePackageGaps(
     }
   }
 
-  // Ads only after foundation: weak GBP/reviews but they already have a site.
+  // Ads only after foundation gaps are clear.
   if (
     website &&
     reviews < WEAK_REVIEW_CRITICAL &&
@@ -171,7 +180,6 @@ export function listServicePackageGaps(
     });
   }
 
-  // Dedupe by id (keep strongest severity).
   const byId = new Map<ServicePackageId, ServicePackageGap>();
   for (const p of packages) {
     const prev = byId.get(p.id);
@@ -180,6 +188,42 @@ export function listServicePackageGaps(
     }
   }
   return [...byId.values()];
+}
+
+/**
+ * SERP must prove they are not producing results for brand, category, or site index.
+ * Maps-only gaps (reviews alone) are not enough.
+ */
+export function hasSerpOrganicFailure(
+  profile: Pick<LeadProfile, "website">,
+  organic: OrganicFootprint | null | undefined,
+): boolean {
+  if (!organic || organic.skipped) return false;
+  if (!hasRealWebsite(profile.website)) return true;
+  if (organic.category_hit === false) return true;
+  if (organic.branded_hit === false) return true;
+  if (
+    typeof organic.site_total_results === "number" &&
+    organic.site_total_results <= THIN_SITE_INDEX_MAX
+  ) {
+    return true;
+  }
+  return false;
+}
+
+/** Cheap Maps gate before spending Serper credits. */
+export function mapsWorthSerpSpend(
+  profile: Pick<LeadProfile, "website" | "review_count" | "has_hours" | "photo_count">,
+): boolean {
+  const reviews = profile.review_count ?? 0;
+  const website = hasRealWebsite(profile.website);
+  if (website && reviews >= STRONG_REVIEW_HARD_SKIP) return false;
+  return (
+    !website ||
+    reviews < STRONG_REVIEW_HARD_SKIP ||
+    profile.has_hours === false ||
+    (profile.photo_count ?? 0) < 3
+  );
 }
 
 /**
@@ -259,6 +303,13 @@ export function scoreVisibilityProxy(
         score += 8;
         reasons.push(`branded_top_${rank}`);
       }
+    }
+    if (organic.category_hit === false) {
+      score -= 16;
+      reasons.push("category_miss");
+    } else if (organic.category_hit === true) {
+      score += 10;
+      reasons.push(`category_hit_${organic.category_rank ?? "?"}`);
     }
   }
 
@@ -363,6 +414,20 @@ export function scoreOrganicWeakness(organic: OrganicFootprint | null | undefine
     }
   }
 
+  if (organic.category_hit === false) {
+    score += 28;
+    reasons.push("category_miss");
+  } else if (organic.category_hit === true) {
+    const rank = organic.category_rank ?? 1;
+    if (rank <= 5) {
+      score -= 20;
+      reasons.push(`category_top_${rank}`);
+    } else {
+      score -= 8;
+      reasons.push(`category_rank_${rank}`);
+    }
+  }
+
   return { score: Math.max(0, Math.min(100, score)), reasons };
 }
 
@@ -389,7 +454,7 @@ export function combineOpportunityScore(
   };
 }
 
-/** Clear B / C+ / Map Pack surface — do not dial as weak presence. */
+/** Clear winners — producing Maps and/or organic results. */
 export function shouldHardSkipStrongPresence(
   profile: LeadProfile,
   organic: OrganicFootprint | null | undefined,
@@ -398,62 +463,61 @@ export function shouldHardSkipStrongPresence(
   const website = hasRealWebsite(profile.website);
   const organicUnavailable = !organic || organic.skipped;
 
-  // Always skip high-review listings with a website — not C-and-below ICP.
   if (website && reviews >= STRONG_REVIEW_HARD_SKIP) return true;
 
-  // Without organic, website + mid reviews = already winning enough on Maps.
   if (organicUnavailable && website && reviews >= STRONG_REVIEW_HARD_SKIP_NO_CSE) {
     return true;
   }
 
-  // With organic: branded top hit + real site + decent reviews → B-tier.
-  if (
-    !organicUnavailable &&
-    website &&
-    reviews >= STRONG_REVIEW_HARD_SKIP_NO_CSE &&
-    organic.branded_hit === true &&
-    (organic.branded_rank ?? 1) <= 3
-  ) {
-    return true;
-  }
-
-  if (
-    !organicUnavailable &&
-    website &&
-    reviews >= STRONG_REVIEW_HARD_SKIP_NO_CSE &&
-    typeof organic.site_total_results === "number" &&
-    organic.site_total_results > 40
-  ) {
-    return true;
+  if (!organicUnavailable) {
+    // Branded + category organic both hit → they are producing search results.
+    if (organic.branded_hit === true && organic.category_hit === true) {
+      return true;
+    }
+    // Branded top-3 + real site + any reviews → not a cold SERP miss.
+    if (
+      website &&
+      reviews >= 8 &&
+      organic.branded_hit === true &&
+      (organic.branded_rank ?? 1) <= 3 &&
+      organic.category_hit !== false
+    ) {
+      return true;
+    }
+    if (
+      website &&
+      reviews >= STRONG_REVIEW_HARD_SKIP_NO_CSE &&
+      typeof organic.site_total_results === "number" &&
+      organic.site_total_results > 40 &&
+      organic.category_hit === true
+    ) {
+      return true;
+    }
   }
 
   return false;
 }
 
 /**
- * Keep C / D / F prospects.
- * - Prefer ≥2 sellable packages
- * - Low-C (visibility ≤ 72) or D/F: one *critical* package is enough
+ * Keep only when live SERP proves a service-category / brand / site miss
+ * that maps to a 1:1 Nemo package, and grade is C / D / F.
  */
 export function shouldKeepWeakProspect(
   breakdown: OpportunityBreakdown,
-  _organic?: OrganicFootprint | null,
+  organic: OrganicFootprint | null | undefined,
+  profile: Pick<LeadProfile, "website">,
 ): boolean {
+  if (!organic || organic.skipped) return false;
   if (!isCOrBelow(breakdown.estimatedGrade)) return false;
-
-  const criticalCount = breakdown.packages.filter((p) => p.severity === "critical").length;
-  const lowC =
-    breakdown.visibilityScore <= LOW_C_VISIBILITY_MAX ||
-    breakdown.estimatedGrade === "D" ||
-    breakdown.estimatedGrade === "F";
-
-  const packagesOk =
-    breakdown.packages.length >= MIN_PACKAGE_GAPS ||
-    (lowC && criticalCount >= 1);
-
-  if (!packagesOk) return false;
-
-  if (breakdown.total < MIN_OPPORTUNITY_KEEP && !breakdown.criticalMapsGap && !lowC) {
+  if (!hasSerpOrganicFailure(profile, organic)) return false;
+  if (breakdown.packages.length < MIN_PACKAGE_GAPS) return false;
+  // Need real opportunity unless category or branded miss is explicit.
+  if (
+    breakdown.total < MIN_OPPORTUNITY_KEEP &&
+    !breakdown.criticalMapsGap &&
+    organic.category_hit !== false &&
+    organic.branded_hit !== false
+  ) {
     return false;
   }
   return true;
@@ -477,5 +541,11 @@ export function formatOrganicNotes(organic: OrganicFootprint | null | undefined)
       : organic.branded_hit
         ? `branded: hit#${organic.branded_rank ?? "?"}`
         : "branded: miss";
-  return `Organic: ${site} · ${branded}`;
+  const category =
+    organic.category_hit == null
+      ? "category: n/a"
+      : organic.category_hit
+        ? `category: hit#${organic.category_rank ?? "?"}`
+        : "category: miss";
+  return `Organic: ${site} · ${branded} · ${category}`;
 }

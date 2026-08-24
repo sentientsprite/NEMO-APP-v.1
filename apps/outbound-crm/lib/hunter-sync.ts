@@ -19,6 +19,7 @@ import {
   combineOpportunityScore,
   formatOrganicNotes,
   formatPackageNotes,
+  mapsWorthSerpSpend,
   shouldHardSkipStrongPresence,
   shouldKeepWeakProspect,
   type ProspectGrade,
@@ -112,15 +113,23 @@ async function runPlacesSync(maxLeads: number): Promise<HunterSyncResult> {
   if (!secret) return { ok: false, error: "Missing HUNTER_WEBHOOK_SECRET" };
 
   const serpOn = isOrganicSearchConfigured();
-  let serpProbeError: string | undefined;
-  if (serpOn) {
-    const probe = await probeOrganicSearch();
-    if (!probe.ok) {
-      serpProbeError = probe.error || "SERP probe failed";
-    }
+  if (!serpOn) {
+    return {
+      ok: false,
+      error:
+        "SERPER_API_KEY required — Hunter only keeps leads with SERP-proven category/brand/site misses.",
+    };
   }
 
-  // Smaller pool so Places + SERP finish inside Vercel maxDuration.
+  const probe = await probeOrganicSearch();
+  if (!probe.ok) {
+    return {
+      ok: false,
+      error: `Serper not working (${probe.error || "probe failed"}). Fix SERPER_API_KEY, then re-run.`,
+    };
+  }
+
+  // Smaller pool so Places + SERP (site + branded + category) finish inside maxDuration.
   const queries = DEFAULT_QUERIES.slice(0, 3);
   const seen = new Set<string>();
   const candidates: Array<{ placeId: string; query: string }> = [];
@@ -158,11 +167,7 @@ async function runPlacesSync(maxLeads: number): Promise<HunterSyncResult> {
   };
 
   const ranked: Ranked[] = [];
-  let sawOrganicSkip = Boolean(serpProbeError);
-  let organicBlockedReason: string | undefined = serpProbeError
-    ? `SERP down: ${serpProbeError}`
-    : undefined;
-  /** Maps-only deferred stub — used to prefilter before spending SERP credits. */
+  /** Maps-only stub for hard-skip before Serper spend. */
   const deferredOrganic: OrganicFootprint = {
     skipped: true,
     reason: "deferred",
@@ -182,38 +187,30 @@ async function runPlacesSync(maxLeads: number): Promise<HunterSyncResult> {
     const name = (det.name || "Unknown").trim();
     let profile = placeDetailsToProfile(det, { maps_query: c.query });
 
-    // Cheap Maps prefilter before Serper (2 calls/candidate).
     if (shouldHardSkipStrongPresence(profile, deferredOrganic)) continue;
-    const mapsOnly = combineOpportunityScore(profile, deferredOrganic);
-    if (!shouldKeepWeakProspect(mapsOnly, deferredOrganic)) continue;
+    if (!mapsWorthSerpSpend(profile)) continue;
 
     const city = cityHintFromAddressOrQuery(profile.address, c.query);
-    const organic =
-      serpOn && !serpProbeError
-        ? await organicFootprint({
-            website: profile.website,
-            businessName: name,
-            city,
-          })
-        : {
-            ...deferredOrganic,
-            reason: serpProbeError
-              ? `SERP down: ${serpProbeError}`
-              : serpOn
-                ? "deferred"
-                : "SERPER_API_KEY not set",
-          };
+    const organic = await organicFootprint({
+      website: profile.website,
+      businessName: name,
+      city,
+      categoryQuery: c.query,
+    });
 
-    if (organic.skipped && organic.reason !== "deferred") {
-      sawOrganicSkip = true;
-      organicBlockedReason = organic.reason || organicBlockedReason || serpProbeError;
+    if (organic.skipped) {
+      return {
+        ok: false,
+        error: `SERP failed mid-run (${organic.reason || "unknown"}). Fix Serper, then re-run.`,
+      };
     }
+
     profile = { ...profile, organic };
 
     if (shouldHardSkipStrongPresence(profile, organic)) continue;
 
     const breakdown = combineOpportunityScore(profile, organic);
-    if (!shouldKeepWeakProspect(breakdown, organic)) continue;
+    if (!shouldKeepWeakProspect(breakdown, organic, profile)) continue;
 
     profile = {
       ...profile,
@@ -235,13 +232,11 @@ async function runPlacesSync(maxLeads: number): Promise<HunterSyncResult> {
       packages: breakdown.packages,
     });
 
-    // Stop early once we have enough keepers — avoid burning the request budget.
     if (ranked.length >= maxLeads * 2) break;
   }
 
   ranked.sort((a, b) => b.opportunity - a.opportunity);
   const winners = ranked.slice(0, maxLeads);
-  const organicSkipped = sawOrganicSkip;
 
   let posted = 0;
   for (const w of winners) {
@@ -257,8 +252,8 @@ async function runPlacesSync(maxLeads: number): Promise<HunterSyncResult> {
       source: "hunter_weak_presence",
       external_id: `google_place:${w.placeId}`,
       notes: [
-        `Grade: ${w.grade} (C-and-below ICP)`,
-        `Opportunity: ${w.opportunity}/100 (${w.reasons.slice(0, 6).join(", ")})`,
+        `Grade: ${w.grade} (SERP-proven package ICP)`,
+        `Opportunity: ${w.opportunity}/100 (${w.reasons.slice(0, 8).join(", ")})`,
         formatPackageNotes(w.packages),
         `Reviews: ${reviews} · Rating: ${rating ?? "n/a"}`,
         website ? `Website: ${website}` : "Website: no",
@@ -266,7 +261,7 @@ async function runPlacesSync(maxLeads: number): Promise<HunterSyncResult> {
         mapsUrl ? `Maps: ${mapsUrl}` : null,
         `Maps query: ${w.query}`,
         w.profile.address ? `Address: ${w.profile.address}` : null,
-        "Pipeline: outbound-crm C-and-below package Leadfinder",
+        "Pipeline: outbound-crm SERP-first package Leadfinder",
       ]
         .filter(Boolean)
         .join(" · "),
@@ -279,16 +274,10 @@ async function runPlacesSync(maxLeads: number): Promise<HunterSyncResult> {
   }
 
   if (posted === 0) {
-    const serpHint = serpProbeError
-      ? ` Serper is failing (${serpProbeError}) — fix SERPER_API_KEY on Vercel Production and redeploy.`
-      : organicSkipped
-        ? ` SERP skipped: ${organicBlockedReason || "unknown"}.`
-        : !serpOn
-          ? " Set SERPER_API_KEY for organic package scoring."
-          : "";
     return {
       ok: false,
-      error: `C/low-C hunt found 0 keepers (need grade C/D/F + package gaps).${serpHint}`,
+      error:
+        "SERP-first hunt found 0 keepers (need category/brand/site miss + grade C/D/F + package pitch). Pool may be ranking winners — widen trade/city queries.",
     };
   }
 
@@ -296,13 +285,7 @@ async function runPlacesSync(maxLeads: number): Promise<HunterSyncResult> {
     ok: true,
     mode: "places",
     posted,
-    message: serpOn && !organicSkipped && !serpProbeError
-      ? `Posted ${posted} C/low-C lead(s) (Maps + SERP; package gaps). Refresh the queue.`
-      : serpProbeError
-        ? `Posted ${posted} (Maps-only — Serper broken: ${serpProbeError}). Fix SERPER_API_KEY, then re-run. Refresh the queue.`
-        : serpOn && organicSkipped
-          ? `Posted ${posted} C/low-C (Maps packages; some SERP skipped: ${organicBlockedReason || "check SERPER_API_KEY"}). Refresh the queue.`
-          : `Posted ${posted} C/low-C (Maps packages; set SERPER_API_KEY for SEO/organic). Refresh the queue.`,
+    message: `Posted ${posted} SERP-proven C/D/F lead(s) with 1:1 package gaps. Refresh the queue.`,
   };
 }
 

@@ -9,6 +9,9 @@ export interface LeadOrganicProfile {
   branded_hit?: boolean | null;
   branded_rank?: number | null;
   branded_top_links?: string[];
+  category_query?: string;
+  category_hit?: boolean | null;
+  category_rank?: number | null;
   fetched_at?: string;
 }
 

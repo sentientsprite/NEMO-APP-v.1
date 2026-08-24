@@ -122,6 +122,15 @@ function ProfileGrid({ profile }: { profile: LeadProfile }) {
               ? `Hit #${profile.organic.branded_rank ?? "?"}`
               : "Miss (weak brand SERP)"}
       </Field>
+      <Field label="Category organic">
+        {profile.organic?.skipped
+          ? "Skipped"
+          : profile.organic?.category_hit == null
+            ? "—"
+            : profile.organic.category_hit
+              ? `Hit #${profile.organic.category_rank ?? "?"}${profile.organic.category_query ? ` (${profile.organic.category_query})` : ""}`
+              : `Miss${profile.organic.category_query ? ` (${profile.organic.category_query})` : ""}`}
+      </Field>
       {profile.organic?.fetched_at ? (
         <Field label="Organic checked">
           {new Date(profile.organic.fetched_at).toLocaleString()}
