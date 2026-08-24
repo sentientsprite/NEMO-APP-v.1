@@ -10,6 +10,7 @@ import {
   cityHintFromAddressOrQuery,
   isOrganicSearchConfigured,
   organicFootprint,
+  probeOrganicSearch,
   type OrganicFootprint,
 } from "@/lib/custom-search";
 import type { LeadProfile } from "@/lib/lead-profile";
@@ -111,6 +112,14 @@ async function runPlacesSync(maxLeads: number): Promise<HunterSyncResult> {
   if (!secret) return { ok: false, error: "Missing HUNTER_WEBHOOK_SECRET" };
 
   const serpOn = isOrganicSearchConfigured();
+  let serpProbeError: string | undefined;
+  if (serpOn) {
+    const probe = await probeOrganicSearch();
+    if (!probe.ok) {
+      serpProbeError = probe.error || "SERP probe failed";
+    }
+  }
+
   // Smaller pool so Places + SERP finish inside Vercel maxDuration.
   const queries = DEFAULT_QUERIES.slice(0, 3);
   const seen = new Set<string>();
@@ -149,8 +158,10 @@ async function runPlacesSync(maxLeads: number): Promise<HunterSyncResult> {
   };
 
   const ranked: Ranked[] = [];
-  let sawOrganicSkip = false;
-  let organicBlockedReason: string | undefined;
+  let sawOrganicSkip = Boolean(serpProbeError);
+  let organicBlockedReason: string | undefined = serpProbeError
+    ? `SERP down: ${serpProbeError}`
+    : undefined;
   /** Maps-only deferred stub — used to prefilter before spending SERP credits. */
   const deferredOrganic: OrganicFootprint = {
     skipped: true,
@@ -177,17 +188,25 @@ async function runPlacesSync(maxLeads: number): Promise<HunterSyncResult> {
     if (!shouldKeepWeakProspect(mapsOnly, deferredOrganic)) continue;
 
     const city = cityHintFromAddressOrQuery(profile.address, c.query);
-    const organic = serpOn
-      ? await organicFootprint({
-          website: profile.website,
-          businessName: name,
-          city,
-        })
-      : deferredOrganic;
+    const organic =
+      serpOn && !serpProbeError
+        ? await organicFootprint({
+            website: profile.website,
+            businessName: name,
+            city,
+          })
+        : {
+            ...deferredOrganic,
+            reason: serpProbeError
+              ? `SERP down: ${serpProbeError}`
+              : serpOn
+                ? "deferred"
+                : "SERPER_API_KEY not set",
+          };
 
     if (organic.skipped && organic.reason !== "deferred") {
       sawOrganicSkip = true;
-      organicBlockedReason = organic.reason || organicBlockedReason;
+      organicBlockedReason = organic.reason || organicBlockedReason || serpProbeError;
     }
     profile = { ...profile, organic };
 
@@ -260,11 +279,16 @@ async function runPlacesSync(maxLeads: number): Promise<HunterSyncResult> {
   }
 
   if (posted === 0) {
+    const serpHint = serpProbeError
+      ? ` Serper is failing (${serpProbeError}) — fix SERPER_API_KEY on Vercel Production and redeploy.`
+      : organicSkipped
+        ? ` SERP skipped: ${organicBlockedReason || "unknown"}.`
+        : !serpOn
+          ? " Set SERPER_API_KEY for organic package scoring."
+          : "";
     return {
       ok: false,
-      error: serpOn
-        ? "C-and-below hunt found 0 keepers (need ≥2 package gaps + grade C/D/F). Widen queries or check Places/SERP."
-        : "C-and-below hunt found 0 keepers. Set SERPER_API_KEY for organic packages, or widen trade/city queries.",
+      error: `C/low-C hunt found 0 keepers (need grade C/D/F + package gaps).${serpHint}`,
     };
   }
 
@@ -272,11 +296,13 @@ async function runPlacesSync(maxLeads: number): Promise<HunterSyncResult> {
     ok: true,
     mode: "places",
     posted,
-    message: serpOn && !organicSkipped
-      ? `Posted ${posted} C-and-below lead(s) (Maps + SERP; multi-package gaps). Refresh the queue.`
-      : serpOn && organicSkipped
-        ? `Posted ${posted} C-and-below (Maps packages; some SERP skipped: ${organicBlockedReason || "check SERPER_API_KEY"}). Refresh the queue.`
-        : `Posted ${posted} C-and-below (Maps packages; set SERPER_API_KEY for SEO/organic). Refresh the queue.`,
+    message: serpOn && !organicSkipped && !serpProbeError
+      ? `Posted ${posted} C/low-C lead(s) (Maps + SERP; package gaps). Refresh the queue.`
+      : serpProbeError
+        ? `Posted ${posted} (Maps-only — Serper broken: ${serpProbeError}). Fix SERPER_API_KEY, then re-run. Refresh the queue.`
+        : serpOn && organicSkipped
+          ? `Posted ${posted} C/low-C (Maps packages; some SERP skipped: ${organicBlockedReason || "check SERPER_API_KEY"}). Refresh the queue.`
+          : `Posted ${posted} C/low-C (Maps packages; set SERPER_API_KEY for SEO/organic). Refresh the queue.`,
   };
 }
 

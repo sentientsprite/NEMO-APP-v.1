@@ -10,24 +10,25 @@ import type { OrganicFootprint } from "@/lib/custom-search";
 import type { LeadProfile } from "@/lib/lead-profile";
 
 /** Soft prefer under this review count when scoring. */
-export const WEAK_REVIEW_SOFT_MAX = 25;
+export const WEAK_REVIEW_SOFT_MAX = 30;
 /** Critical review gap (SMS review-funnel package). */
-export const WEAK_REVIEW_CRITICAL = 12;
+export const WEAK_REVIEW_CRITICAL = 15;
 /**
- * Website + this many reviews → hard skip (B / C+ surface).
- * With SERP, branded miss can still keep slightly above only if other packages fire.
+ * Website + this many reviews → hard skip (B / strong C+ surface).
  */
-export const STRONG_REVIEW_HARD_SKIP = 40;
+export const STRONG_REVIEW_HARD_SKIP = 45;
 /** Without organic proof, website + this many reviews → hard skip. */
-export const STRONG_REVIEW_HARD_SKIP_NO_CSE = 25;
+export const STRONG_REVIEW_HARD_SKIP_NO_CSE = 32;
 /** @deprecated alias */
 export const STRONG_REVIEW_HARD_SKIP_NO_ORGANIC = STRONG_REVIEW_HARD_SKIP_NO_CSE;
 /** site: totalResults at or below this = thin index (SEO / site package). */
-export const THIN_SITE_INDEX_MAX = 5;
-/** Min opportunity when SERP path has no critical Maps gap (legacy path; prefer grade gate). */
-export const MIN_OPPORTUNITY_KEEP = 50;
-/** Need at least this many sellable packages to queue. */
+export const THIN_SITE_INDEX_MAX = 8;
+/** Min opportunity when no critical Maps gap. */
+export const MIN_OPPORTUNITY_KEEP = 40;
+/** Prefer ≥2 packages; low-C / D / F may keep with 1 critical package. */
 export const MIN_PACKAGE_GAPS = 2;
+/** Visibility at or below this = "low C" (or weaker) — allow 1 critical package. */
+export const LOW_C_VISIBILITY_MAX = 72;
 
 /** LVS-aligned letter grades (visibility score, not opportunity). */
 export type ProspectGrade = "A" | "B" | "C" | "D" | "F";
@@ -193,26 +194,26 @@ export function scoreVisibilityProxy(
   organic: OrganicFootprint | null | undefined,
 ): { score: number; reasons: string[] } {
   const reasons: string[] = [];
-  let score = 88; // start near B; gaps pull into C/D/F
+  let score = 82; // mid-B baseline; common gaps pull into low-C / D / F
   const reviews = profile.review_count ?? 0;
   const website = hasRealWebsite(profile.website);
 
   if (!website) {
-    score -= 28;
+    score -= 26;
     reasons.push("no_website");
   }
 
   if (reviews < 5) {
-    score -= 30;
+    score -= 28;
     reasons.push(`reviews_${reviews}`);
   } else if (reviews < WEAK_REVIEW_CRITICAL) {
-    score -= 22;
+    score -= 20;
     reasons.push(`reviews_${reviews}`);
   } else if (reviews < WEAK_REVIEW_SOFT_MAX) {
-    score -= 12;
+    score -= 14;
     reasons.push(`reviews_mid_${reviews}`);
   } else if (reviews < STRONG_REVIEW_HARD_SKIP) {
-    score -= 4;
+    score -= 6;
     reasons.push(`reviews_ok_${reviews}`);
   } else {
     score += 6;
@@ -430,17 +431,31 @@ export function shouldHardSkipStrongPresence(
 }
 
 /**
- * Keep only C / D / F prospects with enough sellable packages.
- * One lonely gap (e.g. missing hours alone on an otherwise solid shop) is dropped.
+ * Keep C / D / F prospects.
+ * - Prefer ≥2 sellable packages
+ * - Low-C (visibility ≤ 72) or D/F: one *critical* package is enough
  */
 export function shouldKeepWeakProspect(
   breakdown: OpportunityBreakdown,
   _organic?: OrganicFootprint | null,
 ): boolean {
   if (!isCOrBelow(breakdown.estimatedGrade)) return false;
-  if (breakdown.packages.length < MIN_PACKAGE_GAPS) return false;
-  // Prefer stacked weakness: opportunity floor avoids soft C+ noise.
-  if (breakdown.total < MIN_OPPORTUNITY_KEEP && !breakdown.criticalMapsGap) return false;
+
+  const criticalCount = breakdown.packages.filter((p) => p.severity === "critical").length;
+  const lowC =
+    breakdown.visibilityScore <= LOW_C_VISIBILITY_MAX ||
+    breakdown.estimatedGrade === "D" ||
+    breakdown.estimatedGrade === "F";
+
+  const packagesOk =
+    breakdown.packages.length >= MIN_PACKAGE_GAPS ||
+    (lowC && criticalCount >= 1);
+
+  if (!packagesOk) return false;
+
+  if (breakdown.total < MIN_OPPORTUNITY_KEEP && !breakdown.criticalMapsGap && !lowC) {
+    return false;
+  }
   return true;
 }
 

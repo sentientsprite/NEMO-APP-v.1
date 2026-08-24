@@ -35,19 +35,23 @@ const SERPAPI_KEY = process.env.SERPAPI_API_KEY?.trim() || "";
 const MAX_LEADS = Math.min(50, Math.max(1, parseInt(process.env.MAX_LEADS || "10", 10) || 10));
 const STRONG_REVIEW_HARD_SKIP = Math.max(
   20,
-  parseInt(process.env.STRONG_REVIEW_HARD_SKIP || "40", 10) || 40,
+  parseInt(process.env.STRONG_REVIEW_HARD_SKIP || "45", 10) || 45,
 );
 /** When SERP is skipped, hard-skip website + reviews at/above this. */
 const STRONG_REVIEW_HARD_SKIP_NO_CSE = Math.max(
   15,
-  parseInt(process.env.STRONG_REVIEW_HARD_SKIP_NO_CSE || "25", 10) || 25,
+  parseInt(process.env.STRONG_REVIEW_HARD_SKIP_NO_CSE || "32", 10) || 32,
 );
-const MIN_OPPORTUNITY = Math.max(0, parseInt(process.env.MIN_OPPORTUNITY || "50", 10) || 50);
+const MIN_OPPORTUNITY = Math.max(0, parseInt(process.env.MIN_OPPORTUNITY || "40", 10) || 40);
 const MIN_PACKAGE_GAPS = Math.max(1, parseInt(process.env.MIN_PACKAGE_GAPS || "2", 10) || 2);
+const LOW_C_VISIBILITY_MAX = Math.max(
+  50,
+  parseInt(process.env.LOW_C_VISIBILITY_MAX || "72", 10) || 72,
+);
 const POOL_MULTIPLIER = Math.min(12, Math.max(2, parseInt(process.env.POOL_MULTIPLIER || "6", 10) || 6));
-const THIN_SITE_MAX = 5;
-const WEAK_REVIEW_CRITICAL = 12;
-const WEAK_REVIEW_SOFT = 25;
+const THIN_SITE_MAX = 8;
+const WEAK_REVIEW_CRITICAL = 15;
+const WEAK_REVIEW_SOFT = 30;
 
 const DETAIL_FIELDS = [
   "name",
@@ -215,17 +219,17 @@ function listPackages(det, organic) {
 }
 
 function scoreVisibility(det, organic) {
-  let score = 88;
+  let score = 82;
   const reviews = det.user_ratings_total ?? 0;
   const website = Boolean(det.website?.trim());
   const hasHours = det.opening_hours != null;
   const photoCount = Array.isArray(det.photos) ? det.photos.length : 0;
 
-  if (!website) score -= 28;
-  if (reviews < 5) score -= 30;
-  else if (reviews < WEAK_REVIEW_CRITICAL) score -= 22;
-  else if (reviews < WEAK_REVIEW_SOFT) score -= 12;
-  else if (reviews < STRONG_REVIEW_HARD_SKIP) score -= 4;
+  if (!website) score -= 26;
+  if (reviews < 5) score -= 28;
+  else if (reviews < WEAK_REVIEW_CRITICAL) score -= 20;
+  else if (reviews < WEAK_REVIEW_SOFT) score -= 14;
+  else if (reviews < STRONG_REVIEW_HARD_SKIP) score -= 6;
   else score += 6;
   if (!hasHours) score -= 16;
   if (photoCount < 3) score -= 10;
@@ -350,8 +354,19 @@ function hardSkip(det, organic) {
 
 function shouldKeep(breakdown) {
   if (!["C", "D", "F"].includes(breakdown.grade)) return false;
-  if ((breakdown.packages?.length || 0) < MIN_PACKAGE_GAPS) return false;
-  if (breakdown.total < MIN_OPPORTUNITY && !breakdown.critical) return false;
+  const criticalish = (breakdown.packages || []).some((id) =>
+    ["gbp_management", "review_sms_funnel", "website_build_or_fix", "local_seo_sem_geo_aeo"].includes(
+      id,
+    ),
+  );
+  const lowC =
+    breakdown.visibility <= LOW_C_VISIBILITY_MAX ||
+    breakdown.grade === "D" ||
+    breakdown.grade === "F";
+  const packagesOk =
+    (breakdown.packages?.length || 0) >= MIN_PACKAGE_GAPS || (lowC && criticalish);
+  if (!packagesOk) return false;
+  if (breakdown.total < MIN_OPPORTUNITY && !breakdown.critical && !lowC) return false;
   return true;
 }
 
