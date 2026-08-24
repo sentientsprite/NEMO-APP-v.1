@@ -38,9 +38,23 @@ export interface OutboundLead {
 export interface OutboundActivity {
   id: string;
   lead_id: string;
-  type: "call_attempt" | "note" | "status_change" | "pre_call_report";
+  type:
+    | "call_attempt"
+    | "note"
+    | "status_change"
+    | "pre_call_report"
+    | "audit_purchased"
+    | "call_booked"
+    | "retainer_signed";
   note: string | null;
   meta: Record<string, unknown>;
   created_at: string;
   created_by: string | null;
+}
+
+export const LADDER_EVENT_TYPES = ["audit_purchased", "call_booked", "retainer_signed"] as const;
+export type LadderEventType = (typeof LADDER_EVENT_TYPES)[number];
+
+export function isLadderEventType(s: string): s is LadderEventType {
+  return (LADDER_EVENT_TYPES as readonly string[]).includes(s);
 }

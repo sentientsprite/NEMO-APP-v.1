@@ -11,8 +11,8 @@ import {
 } from "@/lib/lead-profile";
 import { fetchPlaceDetails, placeDetailsToProfile } from "@/lib/places";
 import { createClient } from "@/lib/supabase/server";
-import type { LeadStatus } from "@/lib/types";
-import { isLeadStatus } from "@/lib/types";
+import type { LadderEventType, LeadStatus } from "@/lib/types";
+import { isLadderEventType, isLeadStatus } from "@/lib/types";
 
 async function requireUser() {
   const supabase = await createClient();
@@ -195,4 +195,55 @@ export async function generatePreCallReportForm(formData: FormData) {
   const leadId = String(formData.get("leadId") ?? "");
   const result = await generatePreCallReport(leadId);
   if (!result.ok) throw new Error(result.error);
+}
+
+const LADDER_NOTES: Record<LadderEventType, string> = {
+  audit_purchased: "Conversion ladder: paid LVS audit purchased",
+  call_booked: "Conversion ladder: discovery call booked",
+  retainer_signed: "Conversion ladder: monthly retainer signed",
+};
+
+const LADDER_STATUS: Partial<Record<LadderEventType, LeadStatus>> = {
+  call_booked: "meeting_booked",
+  retainer_signed: "closed_won",
+};
+
+/** Append ladder milestone; optionally advance status for booked/won. */
+export async function logLadderEvent(leadId: string, type: LadderEventType) {
+  const { supabase, user } = await requireUser();
+
+  const { error: actErr } = await supabase.from("outbound_activities").insert({
+    lead_id: leadId,
+    type,
+    note: LADDER_NOTES[type],
+    meta: { ladder: true },
+    created_by: user.id,
+  });
+  if (actErr) throw new Error(actErr.message);
+
+  const nextStatus = LADDER_STATUS[type];
+  if (nextStatus) {
+    const { data: lead } = await supabase.from("outbound_leads").select("status").eq("id", leadId).single();
+    const from = (lead?.status as LeadStatus) || "new";
+    if (from !== nextStatus) {
+      await supabase.from("outbound_leads").update({ status: nextStatus, assigned_to: user.id }).eq("id", leadId);
+      await supabase.from("outbound_activities").insert({
+        lead_id: leadId,
+        type: "status_change",
+        note: null,
+        meta: { from, to: nextStatus, via: type },
+        created_by: user.id,
+      });
+    }
+  }
+
+  revalidatePath(`/leads/${leadId}`);
+  revalidatePath("/queue");
+}
+
+export async function logLadderEventForm(formData: FormData) {
+  const leadId = String(formData.get("leadId") ?? "");
+  const type = String(formData.get("type") ?? "");
+  if (!isLadderEventType(type)) throw new Error("Invalid ladder event");
+  await logLadderEvent(leadId, type);
 }
