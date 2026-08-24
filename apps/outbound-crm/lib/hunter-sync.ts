@@ -1,7 +1,6 @@
 /**
- * In-deployment Hunter sync: weak-presence Places discovery (+ optional SERP organic),
- * otherwise upsert committed fixtures. Posts through /api/webhooks/hunter
- * so ingest + dedupe stay identical to GitHub Actions / OpenClaw.
+ * In-deployment Hunter sync: SERP-first Places discovery (3–5 new keepers),
+ * otherwise upsert fixtures. Posts through /api/webhooks/hunter.
  */
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -15,6 +14,7 @@ import {
 } from "@/lib/custom-search";
 import type { LeadProfile } from "@/lib/lead-profile";
 import { fetchPlaceDetails, placeDetailsToProfile, placesApiKey } from "@/lib/places";
+import { createAdminClient } from "@/lib/supabase/admin";
 import {
   combineOpportunityScore,
   formatOrganicNotes,
@@ -41,13 +41,35 @@ type LeadBody = {
   profile?: LeadProfile;
 };
 
+/** Diversified Wasatch Front trades — avoid re-hitting the same Map Pack every run. */
 const DEFAULT_QUERIES = [
-  "HVAC contractor Salt Lake City UT",
-  "plumbing services West Jordan UT",
-  "concrete sealing Salt Lake City UT",
-  "electrician Draper UT",
-  "roofing contractor South Jordan UT",
+  "HVAC contractor Murray UT",
+  "plumbing services Midvale UT",
+  "electrician West Valley City UT",
+  "roofing contractor Sandy UT",
+  "concrete sealing West Jordan UT",
+  "landscaping Taylorsville UT",
+  "garage door repair Ogden UT",
+  "painting contractor Lehi UT",
+  "fence company South Jordan UT",
+  "pest control Draper UT",
 ];
+
+/**
+ * Known test / seed businesses — never queue from Places Hunter.
+ * Invictus + Monkey Wrench were LVS/fixture tests that kept reappearing.
+ */
+const BLOCKED_PLACE_IDS = new Set([
+  "ChIJ-ZdmCxvzUocRtuwXZkDIqX4", // Invictus Coatings
+]);
+
+const BLOCKED_NAME_PATTERNS: RegExp[] = [
+  /\binvictus\s+coatings?\b/i,
+  /\bmonkey\s+wrench\s+plumbing\b/i,
+];
+
+const TARGET_MIN = 3;
+const TARGET_MAX = 5;
 
 function placesKey(): string {
   return placesApiKey();
@@ -65,6 +87,33 @@ function publicBaseUrl(): string {
   const vercel = process.env.VERCEL_URL?.trim();
   if (vercel) return `https://${vercel.replace(/\/+$/, "")}`;
   return "http://localhost:3010";
+}
+
+function isBlockedTestBusiness(name: string, placeId?: string | null): boolean {
+  if (placeId && BLOCKED_PLACE_IDS.has(placeId)) return true;
+  return BLOCKED_NAME_PATTERNS.some((re) => re.test(name));
+}
+
+async function loadKnownGooglePlaceIds(): Promise<Set<string>> {
+  try {
+    const admin = createAdminClient();
+    const { data, error } = await admin
+      .from("outbound_leads")
+      .select("external_id")
+      .like("external_id", "google_place:%")
+      .limit(2000);
+    if (error || !data) return new Set();
+    const ids = new Set<string>();
+    for (const row of data) {
+      const ext = typeof row.external_id === "string" ? row.external_id : "";
+      if (ext.startsWith("google_place:")) {
+        ids.add(ext.slice("google_place:".length));
+      }
+    }
+    return ids;
+  } catch {
+    return new Set();
+  }
 }
 
 async function postLead(body: LeadBody): Promise<{ ok: boolean; status: number }> {
@@ -112,8 +161,9 @@ async function runPlacesSync(maxLeads: number): Promise<HunterSyncResult> {
   if (!key) return { ok: false, error: "Missing GOOGLE_PLACES_API_KEY / GOOGLE_MAPS_API_KEY" };
   if (!secret) return { ok: false, error: "Missing HUNTER_WEBHOOK_SECRET" };
 
-  const serpOn = isOrganicSearchConfigured();
-  if (!serpOn) {
+  const target = Math.min(TARGET_MAX, Math.max(TARGET_MIN, Math.floor(maxLeads) || TARGET_MAX));
+
+  if (!isOrganicSearchConfigured()) {
     return {
       ok: false,
       error:
@@ -129,15 +179,17 @@ async function runPlacesSync(maxLeads: number): Promise<HunterSyncResult> {
     };
   }
 
-  // Smaller pool so Places + SERP (site + branded + category) finish inside maxDuration.
-  const queries = DEFAULT_QUERIES.slice(0, 3);
+  const knownPlaceIds = await loadKnownGooglePlaceIds();
+
+  const queries = DEFAULT_QUERIES;
   const seen = new Set<string>();
   const candidates: Array<{ placeId: string; query: string }> = [];
-  const poolCap = Math.max(maxLeads * 3, 12);
+  // Wide pool — we skip known + blocked, then SERP-filter down to `target`.
+  const poolCap = Math.max(target * 8, 40);
 
   for (const query of queries) {
     if (candidates.length >= poolCap) break;
-    let results: Array<{ place_id?: string }>;
+    let results: Array<{ place_id?: string; name?: string }>;
     try {
       results = await textSearch(key, query);
     } catch (e) {
@@ -146,10 +198,13 @@ async function runPlacesSync(maxLeads: number): Promise<HunterSyncResult> {
         error: `Places search failed: ${e instanceof Error ? e.message : String(e)}`,
       };
     }
-    for (const hit of results.slice(0, 6)) {
+    for (const hit of results.slice(0, 10)) {
       if (!hit.place_id || seen.has(hit.place_id)) continue;
+      if (knownPlaceIds.has(hit.place_id)) continue;
+      if (isBlockedTestBusiness(hit.name || "", hit.place_id)) continue;
       seen.add(hit.place_id);
       candidates.push({ placeId: hit.place_id, query });
+      if (candidates.length >= poolCap) break;
     }
   }
 
@@ -167,13 +222,18 @@ async function runPlacesSync(maxLeads: number): Promise<HunterSyncResult> {
   };
 
   const ranked: Ranked[] = [];
-  /** Maps-only stub for hard-skip before Serper spend. */
   const deferredOrganic: OrganicFootprint = {
     skipped: true,
     reason: "deferred",
   };
+  /** Cap Serper spend so the run finishes inside Vercel maxDuration. */
+  const maxSerpCandidates = Math.max(target * 4, 16);
+  let serpAttempts = 0;
 
   for (const c of candidates) {
+    if (ranked.length >= target) break;
+    if (serpAttempts >= maxSerpCandidates) break;
+
     let det: Awaited<ReturnType<typeof fetchPlaceDetails>>;
     try {
       det = await fetchPlaceDetails(c.placeId);
@@ -185,11 +245,16 @@ async function runPlacesSync(maxLeads: number): Promise<HunterSyncResult> {
     if (!phone) continue;
 
     const name = (det.name || "Unknown").trim();
+    const placeId = det.place_id || c.placeId;
+    if (isBlockedTestBusiness(name, placeId)) continue;
+    if (knownPlaceIds.has(placeId)) continue;
+
     let profile = placeDetailsToProfile(det, { maps_query: c.query });
 
     if (shouldHardSkipStrongPresence(profile, deferredOrganic)) continue;
     if (!mapsWorthSerpSpend(profile)) continue;
 
+    serpAttempts++;
     const city = cityHintFromAddressOrQuery(profile.address, c.query);
     const organic = await organicFootprint({
       website: profile.website,
@@ -222,7 +287,7 @@ async function runPlacesSync(maxLeads: number): Promise<HunterSyncResult> {
     ranked.push({
       name,
       phone,
-      placeId: det.place_id || c.placeId,
+      placeId,
       query: c.query,
       profile,
       opportunity: breakdown.total,
@@ -231,12 +296,12 @@ async function runPlacesSync(maxLeads: number): Promise<HunterSyncResult> {
       grade: breakdown.estimatedGrade,
       packages: breakdown.packages,
     });
-
-    if (ranked.length >= maxLeads * 2) break;
+    // Mark so we don't post the same place twice in one run.
+    knownPlaceIds.add(placeId);
   }
 
   ranked.sort((a, b) => b.opportunity - a.opportunity);
-  const winners = ranked.slice(0, maxLeads);
+  const winners = ranked.slice(0, target);
 
   let posted = 0;
   for (const w of winners) {
@@ -277,7 +342,16 @@ async function runPlacesSync(maxLeads: number): Promise<HunterSyncResult> {
     return {
       ok: false,
       error:
-        "SERP-first hunt found 0 keepers (need category/brand/site miss + grade C/D/F + package pitch). Pool may be ranking winners — widen trade/city queries.",
+        "Found 0 new SERP-proven keepers (skipped known + test businesses). Widen trade/city queries or clear stale queue rows.",
+    };
+  }
+
+  if (posted < TARGET_MIN) {
+    return {
+      ok: true,
+      mode: "places",
+      posted,
+      message: `Posted ${posted} new lead(s) (target ${TARGET_MIN}–${TARGET_MAX}). Pool was thin after skipping known/test businesses — re-run or add cities. Refresh the queue.`,
     };
   }
 
@@ -285,7 +359,7 @@ async function runPlacesSync(maxLeads: number): Promise<HunterSyncResult> {
     ok: true,
     mode: "places",
     posted,
-    message: `Posted ${posted} SERP-proven C/D/F lead(s) with 1:1 package gaps. Refresh the queue.`,
+    message: `Posted ${posted} new SERP-proven lead(s) (target ${TARGET_MIN}–${TARGET_MAX}). Refresh the queue.`,
   };
 }
 
@@ -324,7 +398,7 @@ async function runFixtureSync(): Promise<HunterSyncResult> {
 }
 
 /** Prefer live Places weak-presence Leadfinder; fall back to fixtures. */
-export async function runHunterSyncInline(maxLeads = 5): Promise<HunterSyncResult> {
+export async function runHunterSyncInline(maxLeads = TARGET_MAX): Promise<HunterSyncResult> {
   if (placesKey()) {
     return runPlacesSync(maxLeads);
   }

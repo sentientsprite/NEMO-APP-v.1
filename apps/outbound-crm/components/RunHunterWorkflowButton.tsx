@@ -43,7 +43,8 @@ export function RunHunterWorkflowButton() {
           <p className="mt-0.5 text-xs text-indigo-900/80">
             SERP-first ICP: keep only when <span className="font-medium">category / branded / site</span>{" "}
             checks prove they are not producing results — then map 1:1 packages (GBP, photos, SMS
-            reviews, website, SEO/SEM/GEO/AEO). Requires working{" "}
+            reviews, website, SEO/SEM/GEO/AEO). Posts <span className="font-medium">3–5 new</span>{" "}
+            keepers per run (skips known + test businesses). Requires{" "}
             <span className="font-medium">SERPER_API_KEY</span>.
           </p>
         </div>

@@ -1,12 +1,12 @@
 [
   {
     "name": "Kris Patel",
-    "company": "Monkey Wrench Plumbing",
+    "company": "Pipe Dream Plumbing Co",
     "phone": "(801) 555-0142",
     "email": "kris.patel@example.test",
     "source": "hunter_monday",
     "notes": "855 reviews · local pack ~#4 · Echo + Beacon fit per pipeline",
-    "external_id": "seed-prana-monkey-wrench"
+    "external_id": "seed-prana-pipe-dream"
   },
   {
     "name": "Kris Martinez",
