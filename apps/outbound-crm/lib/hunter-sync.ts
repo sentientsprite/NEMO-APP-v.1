@@ -108,11 +108,11 @@ async function runPlacesSync(maxLeads: number): Promise<HunterSyncResult> {
   if (!secret) return { ok: false, error: "Missing HUNTER_WEBHOOK_SECRET" };
 
   const serpOn = isOrganicSearchConfigured();
-  const queries = DEFAULT_QUERIES.slice(0, 5);
+  // Smaller pool so Places + SERP finish inside Vercel maxDuration.
+  const queries = DEFAULT_QUERIES.slice(0, 3);
   const seen = new Set<string>();
   const candidates: Array<{ placeId: string; query: string }> = [];
-  // Pull a wider pool — we keep weak ones, not Map Pack winners.
-  const poolCap = Math.max(maxLeads * 5, 20);
+  const poolCap = Math.max(maxLeads * 3, 12);
 
   for (const query of queries) {
     if (candidates.length >= poolCap) break;
@@ -125,7 +125,7 @@ async function runPlacesSync(maxLeads: number): Promise<HunterSyncResult> {
         error: `Places search failed: ${e instanceof Error ? e.message : String(e)}`,
       };
     }
-    for (const hit of results.slice(0, 12)) {
+    for (const hit of results.slice(0, 6)) {
       if (!hit.place_id || seen.has(hit.place_id)) continue;
       seen.add(hit.place_id);
       candidates.push({ placeId: hit.place_id, query });
@@ -146,6 +146,11 @@ async function runPlacesSync(maxLeads: number): Promise<HunterSyncResult> {
   const ranked: Ranked[] = [];
   let sawOrganicSkip = false;
   let organicBlockedReason: string | undefined;
+  /** Maps-only deferred stub — used to prefilter before spending SERP credits. */
+  const deferredOrganic: OrganicFootprint = {
+    skipped: true,
+    reason: "deferred",
+  };
 
   for (const c of candidates) {
     let det: Awaited<ReturnType<typeof fetchPlaceDetails>>;
@@ -160,14 +165,22 @@ async function runPlacesSync(maxLeads: number): Promise<HunterSyncResult> {
 
     const name = (det.name || "Unknown").trim();
     let profile = placeDetailsToProfile(det, { maps_query: c.query });
-    const city = cityHintFromAddressOrQuery(profile.address, c.query);
 
-    const organic = await organicFootprint({
-      website: profile.website,
-      businessName: name,
-      city,
-    });
-    if (organic.skipped) {
+    // Cheap Maps prefilter before Serper (2 calls/candidate).
+    if (shouldHardSkipStrongPresence(profile, deferredOrganic)) continue;
+    const mapsOnly = combineOpportunityScore(profile, deferredOrganic);
+    if (!shouldKeepWeakProspect(mapsOnly, deferredOrganic)) continue;
+
+    const city = cityHintFromAddressOrQuery(profile.address, c.query);
+    const organic = serpOn
+      ? await organicFootprint({
+          website: profile.website,
+          businessName: name,
+          city,
+        })
+      : deferredOrganic;
+
+    if (organic.skipped && organic.reason !== "deferred") {
       sawOrganicSkip = true;
       organicBlockedReason = organic.reason || organicBlockedReason;
     }
@@ -190,6 +203,9 @@ async function runPlacesSync(maxLeads: number): Promise<HunterSyncResult> {
       reasons: breakdown.reasons,
       organic,
     });
+
+    // Stop early once we have enough keepers — avoid burning the request budget.
+    if (ranked.length >= maxLeads * 2) break;
   }
 
   ranked.sort((a, b) => b.opportunity - a.opportunity);
@@ -245,7 +261,7 @@ async function runPlacesSync(maxLeads: number): Promise<HunterSyncResult> {
     message: serpOn && !organicSkipped
       ? `Weak-presence Leadfinder posted ${posted} lead(s) (Maps + SERP organic). Refresh the queue.`
       : serpOn && organicSkipped
-        ? `Weak-presence posted ${posted} (Maps-only keepers). SERP blocked: ${organicBlockedReason || "check SERPER_API_KEY"}. Refresh the queue.`
+        ? `Weak-presence posted ${posted} (Maps keepers; some SERP skipped: ${organicBlockedReason || "check SERPER_API_KEY"}). Refresh the queue.`
         : `Weak-presence posted ${posted} (Maps-only; set SERPER_API_KEY for organic). Refresh the queue.`,
   };
 }
@@ -285,7 +301,7 @@ async function runFixtureSync(): Promise<HunterSyncResult> {
 }
 
 /** Prefer live Places weak-presence Leadfinder; fall back to fixtures. */
-export async function runHunterSyncInline(maxLeads = 8): Promise<HunterSyncResult> {
+export async function runHunterSyncInline(maxLeads = 5): Promise<HunterSyncResult> {
   if (placesKey()) {
     return runPlacesSync(maxLeads);
   }
