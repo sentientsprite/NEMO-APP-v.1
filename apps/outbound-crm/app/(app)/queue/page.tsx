@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { RunHunterWorkflowButton } from "@/components/RunHunterWorkflowButton";
+import { auditHintFromNotes, leadChannel } from "@/lib/lead-ux";
 import { createClient } from "@/lib/supabase/server";
 import type { OutboundLead } from "@/lib/types";
 import { isLeadStatus, LEAD_STATUSES } from "@/lib/types";
@@ -37,7 +38,7 @@ export default async function QueuePage({ searchParams }: PageProps) {
   }
 
   if (q) {
-    query = query.or(`name.ilike.%${q}%,phone.ilike.%${q}%,company.ilike.%${q}%`);
+    query = query.or(`name.ilike.%${q}%,phone.ilike.%${q}%,company.ilike.%${q}%,email.ilike.%${q}%`);
   }
 
   const { data: leads, error } = await query;
@@ -53,8 +54,8 @@ export default async function QueuePage({ searchParams }: PageProps) {
       <div>
         <h1 className="text-2xl font-bold text-slate-900">Outbound queue</h1>
         <p className="text-sm text-slate-600">
-          Default: next {limitNum} <span className="font-medium">new</span> leads (Hunter webhook). Use filters for
-          other stages or sources.
+          Call leads show a green dial button; email leads show violet email. Open a card for the
+          step-by-step playbook.
         </p>
       </div>
 
@@ -86,17 +87,13 @@ export default async function QueuePage({ searchParams }: PageProps) {
           <input
             name="source"
             defaultValue={source}
-            placeholder="e.g. hunter_monday"
+            placeholder="e.g. hunter_weak_presence"
             className="w-full rounded-lg border border-slate-300 px-3 py-2"
           />
         </label>
         <label className="text-sm sm:col-span-2">
-          <span className="mb-1 block font-medium text-slate-700">Search name / phone / company</span>
-          <input
-            name="q"
-            defaultValue={qRaw}
-            className="w-full rounded-lg border border-slate-300 px-3 py-2"
-          />
+          <span className="mb-1 block font-medium text-slate-700">Search name / phone / company / email</span>
+          <input name="q" defaultValue={qRaw} className="w-full rounded-lg border border-slate-300 px-3 py-2" />
         </label>
         <div className="sm:col-span-2">
           <button type="submit" className="rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white">
@@ -108,31 +105,89 @@ export default async function QueuePage({ searchParams }: PageProps) {
       <ul className="space-y-3">
         {rows.length === 0 ? (
           <li className="rounded-xl border border-dashed border-slate-300 bg-white p-8 text-center text-slate-600">
-            No leads match. POST one via the Hunter webhook (see README).
+            No leads match. Run Hunter or wait for the webhook.
           </li>
         ) : (
-          rows.map((lead) => (
-            <li key={lead.id} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <Link href={`/leads/${lead.id}`} className="text-lg font-semibold text-indigo-700">
-                    {lead.name}
-                  </Link>
-                  {lead.company ? <p className="text-sm text-slate-600">{lead.company}</p> : null}
-                  <p className="text-xs uppercase tracking-wide text-slate-500">
-                    {lead.status} · {lead.source ?? "—"}
-                  </p>
+          rows.map((lead) => {
+            const channel = leadChannel(lead);
+            const audit = auditHintFromNotes(lead.notes);
+            const mailto = lead.email
+              ? `mailto:${encodeURIComponent(lead.email)}?subject=${encodeURIComponent(`Prana — ${lead.name}`)}`
+              : null;
+
+            return (
+              <li
+                key={lead.id}
+                className={`rounded-xl border bg-white p-4 shadow-sm ${
+                  channel === "email" ? "border-l-4 border-l-violet-500 border-slate-200" : "border-l-4 border-l-emerald-500 border-slate-200"
+                }`}
+              >
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="mb-1 flex flex-wrap items-center gap-2">
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
+                          channel === "email"
+                            ? "bg-violet-100 text-violet-900"
+                            : "bg-emerald-100 text-emerald-900"
+                        }`}
+                      >
+                        {channel === "email" ? "Email" : "Call"}
+                      </span>
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                          audit.done ? "bg-teal-50 text-teal-800" : "bg-amber-50 text-amber-900"
+                        }`}
+                      >
+                        {audit.label}
+                      </span>
+                    </div>
+                    <Link href={`/leads/${lead.id}`} className="text-lg font-semibold text-indigo-700">
+                      {lead.name}
+                    </Link>
+                    {lead.company && lead.company !== lead.name ? (
+                      <p className="text-sm text-slate-600">{lead.company}</p>
+                    ) : null}
+                    <p className="text-xs uppercase tracking-wide text-slate-500">
+                      {lead.status} · {lead.source ?? "—"}
+                    </p>
+                    {channel === "call" ? (
+                      <p className="mt-2 font-mono text-sm text-slate-800">{lead.phone}</p>
+                    ) : (
+                      <p className="mt-2 text-sm font-medium text-violet-900">{lead.email || "(no email)"}</p>
+                    )}
+                  </div>
+                  <div className="flex shrink-0 flex-col gap-2">
+                    {channel === "call" ? (
+                      <a
+                        href={telHref(lead.phone_normalized)}
+                        className="min-h-[44px] min-w-[44px] rounded-xl bg-emerald-600 px-4 py-3 text-center text-sm font-bold text-white"
+                      >
+                        Call
+                      </a>
+                    ) : mailto ? (
+                      <a
+                        href={mailto}
+                        className="min-h-[44px] min-w-[44px] rounded-xl bg-violet-700 px-4 py-3 text-center text-sm font-bold text-white"
+                      >
+                        Email
+                      </a>
+                    ) : (
+                      <span className="rounded-xl bg-violet-100 px-4 py-3 text-center text-sm font-semibold text-violet-800">
+                        Email lead
+                      </span>
+                    )}
+                    <Link
+                      href={`/leads/${lead.id}`}
+                      className="rounded-xl border border-slate-300 px-3 py-2 text-center text-xs font-semibold text-slate-700"
+                    >
+                      Open playbook
+                    </Link>
+                  </div>
                 </div>
-                <a
-                  href={telHref(lead.phone_normalized)}
-                  className="min-h-[44px] min-w-[44px] shrink-0 rounded-xl bg-emerald-600 px-4 py-3 text-center text-sm font-bold text-white"
-                >
-                  Call
-                </a>
-              </div>
-              <p className="mt-2 font-mono text-sm text-slate-800">{lead.phone}</p>
-            </li>
-          ))
+              </li>
+            );
+          })
         )}
       </ul>
     </div>
