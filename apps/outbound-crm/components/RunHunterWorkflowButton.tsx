@@ -29,8 +29,8 @@ export function RunHunterWorkflowButton() {
           <p className="text-sm font-semibold text-indigo-950">Hunter lead sync</p>
           <p className="mt-0.5 text-xs text-indigo-900/80">
             Finds <span className="font-medium">weak</span> local presence (low reviews, no website,
-            missing hours — not Map Pack winners). Needs Places key; organic filters need Custom
-            Search API enabled on the CSE GCP project. Keepers land as{" "}
+            missing hours — not Map Pack winners). Needs Places key; organic filters need{" "}
+            <span className="font-medium">SERPER_API_KEY</span>. Keepers land as{" "}
             <span className="font-medium">new</span>.
           </p>
         </div>

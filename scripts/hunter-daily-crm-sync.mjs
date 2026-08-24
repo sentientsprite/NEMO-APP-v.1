@@ -10,11 +10,12 @@
  *   GOOGLE_PLACES_API_KEY      — Places API
  *   OUTBOUND_CRM_WEBHOOK_URL   — https://…/api/webhooks/hunter
  *   HUNTER_WEBHOOK_SECRET      — Bearer secret (match Vercel)
- *   GOOGLE_CSE_CX              — optional Programmable Search Engine (entire web)
- *   GOOGLE_CSE_API_KEY         — optional; falls back to Places key
+ *   SERPER_API_KEY             — preferred SERP (serper.dev)
+ *   SERPAPI_API_KEY            — optional fallback (serpapi.com)
  *   MAX_LEADS                  — optional, default 10
  *   MAX_USER_RATINGS_TOTAL     — soft prefer under this (default 80); hard-skip ≥ STRONG
  *   STRONG_REVIEW_HARD_SKIP    — default 150 (with website → skip)
+ *   STRONG_REVIEW_HARD_SKIP_NO_CSE — default 60 when organic skipped
  *   MIN_OPPORTUNITY            — default 35
  *   POOL_MULTIPLIER            — default 6
  *   HUNTER_SEARCH_QUERIES_PATH — optional JSON array of query strings
@@ -28,14 +29,14 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const KEY = process.env.GOOGLE_PLACES_API_KEY?.trim();
 const WEBHOOK = process.env.OUTBOUND_CRM_WEBHOOK_URL?.trim().replace(/\/+$/, "");
 const SECRET = process.env.HUNTER_WEBHOOK_SECRET?.trim();
-const CSE_CX = process.env.GOOGLE_CSE_CX?.trim() || "";
-const CSE_KEY = process.env.GOOGLE_CSE_API_KEY?.trim() || KEY || "";
+const SERPER_KEY = process.env.SERPER_API_KEY?.trim() || "";
+const SERPAPI_KEY = process.env.SERPAPI_API_KEY?.trim() || "";
 const MAX_LEADS = Math.min(50, Math.max(1, parseInt(process.env.MAX_LEADS || "10", 10) || 10));
 const STRONG_REVIEW_HARD_SKIP = Math.max(
   50,
   parseInt(process.env.STRONG_REVIEW_HARD_SKIP || "150", 10) || 150,
 );
-/** When CSE is skipped, hard-skip website + reviews at/above this (Maps-only safety). */
+/** When SERP is skipped, hard-skip website + reviews at/above this (Maps-only safety). */
 const STRONG_REVIEW_HARD_SKIP_NO_CSE = Math.max(
   30,
   parseInt(process.env.STRONG_REVIEW_HARD_SKIP_NO_CSE || "60", 10) || 60,
@@ -108,42 +109,56 @@ function cityHint(address, mapsQuery) {
   return "Salt Lake City";
 }
 
-async function cseSearch(q, num = 5) {
-  if (!CSE_CX || !CSE_KEY) return null;
-  const u = new URL("https://www.googleapis.com/customsearch/v1");
-  u.searchParams.set("key", CSE_KEY);
-  u.searchParams.set("cx", CSE_CX);
-  u.searchParams.set("q", q);
-  u.searchParams.set("num", String(num));
-  const res = await fetch(u);
-  const data = await res.json();
-  if (!res.ok || data.error) {
-    throw new Error(data.error?.message || `CSE HTTP ${res.status}`);
+async function serpSearch(q, num = 5) {
+  if (SERPER_KEY) {
+    const res = await fetch("https://google.serper.dev/search", {
+      method: "POST",
+      headers: { "X-API-KEY": SERPER_KEY, "Content-Type": "application/json" },
+      body: JSON.stringify({ q, num }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || `Serper HTTP ${res.status}`);
+    const items = (data.organic || []).map((i) => ({ link: i.link, title: i.title || "" }));
+    let totalResults = parseInt(String(data.searchInformation?.totalResults || "0").replace(/,/g, ""), 10) || 0;
+    if (totalResults <= 0 && items.length) totalResults = items.length;
+    return { totalResults, items };
   }
-  return {
-    totalResults: parseInt(data.searchInformation?.totalResults || "0", 10) || 0,
-    items: (data.items || []).map((i) => ({ link: i.link, title: i.title || "" })),
-  };
+  if (SERPAPI_KEY) {
+    const u = new URL("https://serpapi.com/search.json");
+    u.searchParams.set("engine", "google");
+    u.searchParams.set("q", q);
+    u.searchParams.set("num", String(num));
+    u.searchParams.set("api_key", SERPAPI_KEY);
+    const res = await fetch(u);
+    const data = await res.json();
+    if (!res.ok || data.error) throw new Error(data.error || `SerpAPI HTTP ${res.status}`);
+    const items = (data.organic_results || []).map((i) => ({ link: i.link, title: i.title || "" }));
+    let totalResults =
+      parseInt(String(data.search_information?.total_results || "0").replace(/,/g, ""), 10) || 0;
+    if (totalResults <= 0 && items.length) totalResults = items.length;
+    return { totalResults, items };
+  }
+  return null;
 }
 
 async function fetchOrganic(name, website, city) {
   const fetched_at = new Date().toISOString();
-  if (!CSE_CX || !CSE_KEY) {
-    return { skipped: true, reason: "GOOGLE_CSE_CX not set", fetched_at };
+  if (!SERPER_KEY && !SERPAPI_KEY) {
+    return { skipped: true, reason: "SERPER_API_KEY not set", fetched_at };
   }
   const hostname = hostnameFromUrl(website);
   const out = { skipped: false, hostname, fetched_at };
   try {
     if (hostname) {
       out.site_query = `site:${hostname}`;
-      const site = await cseSearch(out.site_query, 3);
+      const site = await serpSearch(out.site_query, 5);
       out.site_total_results = site?.totalResults ?? 0;
     } else {
       out.site_total_results = null;
     }
     const safeName = name.replace(/"/g, "").trim();
     out.branded_query = `"${safeName}" ${city}`;
-    const branded = await cseSearch(out.branded_query, 5);
+    const branded = await serpSearch(out.branded_query, 8);
     out.branded_top_links = (branded?.items || []).map((i) => i.link);
     let rank = null;
     if (hostname) {
@@ -352,7 +367,7 @@ enriched.sort((a, b) => b.score - a.score);
 const winners = enriched.slice(0, MAX_LEADS);
 
 console.log(
-  `Weak-presence: ${enriched.length} keepers from ${staged.length} staged; posting top ${winners.length} (CSE=${Boolean(CSE_CX)}).`,
+  `Weak-presence: ${enriched.length} keepers from ${staged.length} staged; posting top ${winners.length} (SERP=${Boolean(SERPER_KEY || SERPAPI_KEY)}).`,
 );
 
 const posted = [];
@@ -371,7 +386,7 @@ for (let i = 0; i < winners.length; i++) {
 
   const siteNote =
     organic.skipped
-      ? `Organic: skipped (${organic.reason || "no CSE"})`
+      ? `Organic: skipped (${organic.reason || "no SERP"})`
       : `Organic: site≈${organic.site_total_results ?? "n/a"} · branded: ${
           organic.branded_hit ? `hit#${organic.branded_rank}` : "miss"
         }`;
@@ -434,7 +449,7 @@ for (let i = 0; i < winners.length; i++) {
 console.log(`\nFinished: posted ${posted.length} weak-presence leads (cap ${MAX_LEADS}).`);
 if (posted.length === 0) {
   console.error(
-    "No leads posted — pool may be strong winners only, or check Places/CSE billing + webhook secrets.",
+    "No leads posted — pool may be strong winners only, or check Places/SERP + webhook secrets.",
   );
   process.exit(1);
 }

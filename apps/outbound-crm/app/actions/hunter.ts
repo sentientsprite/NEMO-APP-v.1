@@ -15,8 +15,8 @@ const DISPATCH_TIMEOUT_MS = 18_000;
  * Order:
  * 1. Optional Make/n8n: `HUNTER_DISPATCH_WEBHOOK_URL`
  * 2. Optional GitHub Actions: `HUNTER_GITHUB_DISPATCH_TOKEN`
- * 3. **Inline (default):** Weak-presence Places Leadfinder (+ optional CSE via
- *    `GOOGLE_CSE_CX`) when a Places key is set; otherwise upsert fixtures.
+ * 3. **Inline (default):** Weak-presence Places Leadfinder (+ optional SERP via
+ *    `SERPER_API_KEY`) when a Places key is set; otherwise upsert fixtures.
  */
 export async function dispatchHunterLeadWorkflowAction(): Promise<HunterDispatchResult> {
   const supabase = await createClient();

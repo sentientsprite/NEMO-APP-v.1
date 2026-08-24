@@ -7,6 +7,8 @@ name: Hunter daily → Outbound CRM (Google Places — needs GCP billing)
 #   GOOGLE_PLACES_API_KEY      — Maps Platform key with Places API enabled
 #   OUTBOUND_CRM_WEBHOOK_URL   — full URL …/api/webhooks/hunter
 #   HUNTER_WEBHOOK_SECRET      — same bearer secret as Vercel Production
+#   SERPER_API_KEY             — optional; organic site:/branded via serper.dev
+#   SERPAPI_API_KEY            — optional fallback
 #
 # See apps/outbound-crm/docs/HUNTER_SCHEDULE.md
 
@@ -39,5 +41,7 @@ jobs:
           GOOGLE_PLACES_API_KEY: ${{ secrets.GOOGLE_PLACES_API_KEY }}
           OUTBOUND_CRM_WEBHOOK_URL: ${{ secrets.OUTBOUND_CRM_WEBHOOK_URL }}
           HUNTER_WEBHOOK_SECRET: ${{ secrets.HUNTER_WEBHOOK_SECRET }}
+          SERPER_API_KEY: ${{ secrets.SERPER_API_KEY }}
+          SERPAPI_API_KEY: ${{ secrets.SERPAPI_API_KEY }}
           MAX_LEADS: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.max_leads || '10' }}
         run: node scripts/hunter-daily-crm-sync.mjs
