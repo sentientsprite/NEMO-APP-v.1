@@ -39,7 +39,7 @@ If **`nemo-app-v-1`** was mistakenly wired to **`apps/outbound-crm`**, switch th
 
 ---
 
-## Weak-presence Leadfinder (Places + Custom Search)
+## Weak-presence Leadfinder (Places + SERP organic)
 
 ### Inline button (`Run Hunter now` on `/queue`)
 
@@ -47,7 +47,7 @@ Uses [`lib/hunter-sync.ts`](../lib/hunter-sync.ts):
 
 1. Places Text Search (trade + city queries)
 2. Place Details
-3. Optional CSE: `site:{domain}` + `"Business Name" City`
+3. Optional SERP: `site:{domain}` + `"Business Name" City` via **Serper** (or SerpAPI)
 4. Opportunity score (higher = weaker) → hard-skip strong winners (e.g. ≥150 reviews + website)
 5. POST keepers with `source=hunter_weak_presence` and `profile.organic`
 
@@ -58,41 +58,40 @@ Uses [`lib/hunter-sync.ts`](../lib/hunter-sync.ts):
 | `GOOGLE_PLACES_API_KEY` or `GOOGLE_MAPS_API_KEY` | Yes for live hunt | Places API |
 | `HUNTER_WEBHOOK_SECRET` | Yes | Same as webhook auth |
 | `OUTBOUND_CRM_PUBLIC_URL` | Recommended | Public CRM origin for self-POST |
-| `GOOGLE_CSE_CX` | For organic | Programmable Search Engine ID (**Search the entire web**) |
-| `GOOGLE_CSE_API_KEY` | Optional | Falls back to Places key |
+| `SERPER_API_KEY` | For organic | [serper.dev](https://serper.dev) — preferred |
+| `SERPAPI_API_KEY` | Optional | Fallback if Serper unset |
 
-**CSE setup:** [Programmable Search Engine](https://programmablesearchengine.google.com/) → create → **Search the entire web** → copy CX → enable **Custom Search API** on the GCP key.
+**SERP setup:** Create a Serper account → copy API key → set `SERPER_API_KEY` on Vercel → redeploy. (Google Custom Search JSON API is abandoned — closed to new GCP customers.)
 
-Without `GOOGLE_CSE_CX`, Hunter still prefers weak Maps (no website / low reviews / missing hours) but skips `site:` / branded checks.
+Without a SERP key, Hunter still prefers weak Maps (no website / low reviews / missing hours) but skips `site:` / branded checks.
 
-### CSE troubleshooting
+### SERP troubleshooting
 
-If organic shows `skipped` / **blocked** / **“does not have the access to Custom Search JSON API”**:
+If organic shows `skipped`:
 
-1. Enable **Custom Search API** on the **same GCP project** as `GOOGLE_CSE_API_KEY`
-2. Link **billing** on that project (JSON API requires a billing account even for the free daily quota)
-3. Key restrictions must allow Custom Search API
-4. CX engine = **Search the entire web**
-5. Redeploy `outbound-crm` → **Run Hunter now** → expect `profile.organic.skipped === false`
+1. Confirm `SERPER_API_KEY` (or `SERPAPI_API_KEY`) on **outbound-crm** Production
+2. Redeploy so the runtime picks up the secret
+3. **Run Hunter now** → expect `Organic: site≈N · branded: miss|hit` in notes
 
 ### GitHub Actions daily
 
 Workflow: **[`.github/workflows/hunter-daily-outbound-crm.yml`](../../../.github/workflows/hunter-daily-outbound-crm.yml)**  
 Script: **`scripts/hunter-daily-crm-sync.mjs`** — same weak-presence ranking; source `hunter_weak_presence_daily`.
 
-Sync secrets with Vercel (`HUNTER_WEBHOOK_SECRET`, `OUTBOUND_CRM_WEBHOOK_URL`, Places + optional CSE). After `gh auth login`:
+Sync secrets with Vercel (`HUNTER_WEBHOOK_SECRET`, `OUTBOUND_CRM_WEBHOOK_URL`, Places + `SERPER_API_KEY`). After `gh auth login`:
 
 ```bash
 gh secret set OUTBOUND_CRM_WEBHOOK_URL --body "https://outbound-crm-five.vercel.app/api/webhooks/hunter" -R sentientsprite/NEMO-APP-v.1
-# HUNTER_WEBHOOK_SECRET: paste same value as Vercel Production
+# HUNTER_WEBHOOK_SECRET / SERPER_API_KEY: paste same values as Vercel Production
 gh secret set HUNTER_WEBHOOK_SECRET -R sentientsprite/NEMO-APP-v.1
+gh secret set SERPER_API_KEY -R sentientsprite/NEMO-APP-v.1
 ```
 
 Queries: **`scripts/hunter-search-queries.json`**.
 
-Tunable env: `MAX_LEADS`, `STRONG_REVIEW_HARD_SKIP` (default 150 with CSE), `STRONG_REVIEW_HARD_SKIP_NO_CSE` (default 60 when organic skipped), `MIN_OPPORTUNITY` (default 35), `POOL_MULTIPLIER`, `GOOGLE_CSE_CX`.
+Tunable env: `MAX_LEADS`, `STRONG_REVIEW_HARD_SKIP` (default 150 with SERP), `STRONG_REVIEW_HARD_SKIP_NO_CSE` (default 60 when organic skipped), `MIN_OPPORTUNITY` (default 35), `POOL_MULTIPLIER`.
 
-**Maps-only mode (CSE blocked or unset):** keepers require a **critical Maps gap** — no website, **&lt;15 reviews**, or missing hours. Mid-tier listings (website + 15–60+ reviews) are dropped until organic scoring works.
+**Maps-only mode (SERP unset or failing):** keepers require a **critical Maps gap** — no website, **&lt;15 reviews**, or missing hours. Mid-tier listings (website + 15–60+ reviews) are dropped until organic scoring works.
 
 ### OpenClaw Hunter vs Places script
 
@@ -126,10 +125,10 @@ Webhook fields: **`README.md`** (Hunter webhook section). Prefer posting `profil
 - Expect **low reviews / no website / thin site:** — not 4.8★ / thousands of reviews.
 - **`503` / `401`** → wrong Vercel env or bearer secret.
 - **`Missing GOOGLE_PLACES_API_KEY`** on **Hunter daily** workflow → expected until billing; use **fixture** workflow instead.
-- CSE errors → see troubleshooting above.
+- CSE / SERP errors → see SERP troubleshooting above.
 
 ## Deferred (not blocking dialing / pSEO)
 
-- **LSA detection** — needs SerpAPI-class SERP, not CSE
+- **LSA detection** — SerpAPI/Serper local-ads fields later
 - **Cold email** — Resend sandbox / no dedicated sending domain
 - **Blind social auto-post** — use `content_drafts` + human approve (`POST /api/content-drafts/approve`)

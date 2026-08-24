@@ -1,5 +1,5 @@
 /**
- * In-deployment Hunter sync: weak-presence Places discovery (+ optional CSE),
+ * In-deployment Hunter sync: weak-presence Places discovery (+ optional SERP organic),
  * otherwise upsert committed fixtures. Posts through /api/webhooks/hunter
  * so ingest + dedupe stay identical to GitHub Actions / OpenClaw.
  */
@@ -8,7 +8,7 @@ import { join } from "node:path";
 
 import {
   cityHintFromAddressOrQuery,
-  isCustomSearchConfigured,
+  isOrganicSearchConfigured,
   organicFootprint,
   type OrganicFootprint,
 } from "@/lib/custom-search";
@@ -107,7 +107,7 @@ async function runPlacesSync(maxLeads: number): Promise<HunterSyncResult> {
   if (!key) return { ok: false, error: "Missing GOOGLE_PLACES_API_KEY / GOOGLE_MAPS_API_KEY" };
   if (!secret) return { ok: false, error: "Missing HUNTER_WEBHOOK_SECRET" };
 
-  const cseOn = isCustomSearchConfigured();
+  const serpOn = isOrganicSearchConfigured();
   const queries = DEFAULT_QUERIES.slice(0, 5);
   const seen = new Set<string>();
   const candidates: Array<{ placeId: string; query: string }> = [];
@@ -145,7 +145,7 @@ async function runPlacesSync(maxLeads: number): Promise<HunterSyncResult> {
 
   const ranked: Ranked[] = [];
   let sawOrganicSkip = false;
-  let cseBlockedReason: string | undefined;
+  let organicBlockedReason: string | undefined;
 
   for (const c of candidates) {
     let det: Awaited<ReturnType<typeof fetchPlaceDetails>>;
@@ -169,7 +169,7 @@ async function runPlacesSync(maxLeads: number): Promise<HunterSyncResult> {
     });
     if (organic.skipped) {
       sawOrganicSkip = true;
-      cseBlockedReason = organic.reason || cseBlockedReason;
+      organicBlockedReason = organic.reason || organicBlockedReason;
     }
     profile = { ...profile, organic };
 
@@ -232,9 +232,9 @@ async function runPlacesSync(maxLeads: number): Promise<HunterSyncResult> {
   if (posted === 0) {
     return {
       ok: false,
-      error: cseOn
-        ? "Weak-presence hunt found 0 keepers (pool may be Map Pack winners only, or phone/billing). Widen queries or check Places/CSE."
-        : "Weak-presence hunt found 0 keepers. Set GOOGLE_CSE_CX for site:/branded checks, or widen trade/city queries.",
+      error: serpOn
+        ? "Weak-presence hunt found 0 keepers (pool may be Map Pack winners only, or phone/billing). Widen queries or check Places/SERP."
+        : "Weak-presence hunt found 0 keepers. Set SERPER_API_KEY (or SERPAPI_API_KEY) for site:/branded organic, or widen trade/city queries.",
     };
   }
 
@@ -242,11 +242,11 @@ async function runPlacesSync(maxLeads: number): Promise<HunterSyncResult> {
     ok: true,
     mode: "places",
     posted,
-    message: cseOn && !organicSkipped
-      ? `Weak-presence Leadfinder posted ${posted} lead(s) (Maps + organic). Only critical Maps gaps or weak site:/branded. Refresh the queue.`
-      : cseOn && organicSkipped
-        ? `Weak-presence posted ${posted} (Maps-only keepers: no website / <15 reviews / missing hours). CSE blocked: ${cseBlockedReason || "enable Custom Search API + billing on the GCP project for GOOGLE_CSE_API_KEY"}. Refresh the queue.`
-        : `Weak-presence posted ${posted} (Maps-only; set GOOGLE_CSE_CX for organic). Refresh the queue.`,
+    message: serpOn && !organicSkipped
+      ? `Weak-presence Leadfinder posted ${posted} lead(s) (Maps + SERP organic). Refresh the queue.`
+      : serpOn && organicSkipped
+        ? `Weak-presence posted ${posted} (Maps-only keepers). SERP blocked: ${organicBlockedReason || "check SERPER_API_KEY"}. Refresh the queue.`
+        : `Weak-presence posted ${posted} (Maps-only; set SERPER_API_KEY for organic). Refresh the queue.`,
   };
 }
 

@@ -12,13 +12,15 @@ export const WEAK_REVIEW_CRITICAL = 15;
 /** Map Pack winners at or above this + website (+ branded when CSE works) → hard skip. */
 export const STRONG_REVIEW_HARD_SKIP = 150;
 /**
- * When Custom Search is unavailable, treat this lower review count + website as
+ * When SERP organic is unavailable, treat this lower review count + website as
  * "already winning enough" — without organic we cannot prove weakness.
  */
 export const STRONG_REVIEW_HARD_SKIP_NO_CSE = 60;
+/** @deprecated alias — same as STRONG_REVIEW_HARD_SKIP_NO_CSE */
+export const STRONG_REVIEW_HARD_SKIP_NO_ORGANIC = STRONG_REVIEW_HARD_SKIP_NO_CSE;
 /** site: totalResults at or below this counts as thin index. */
 export const THIN_SITE_INDEX_MAX = 5;
-/** Minimum opportunity score to keep when no critical Maps gap (CSE path only). */
+/** Minimum opportunity score to keep when no critical Maps gap (SERP path only). */
 export const MIN_OPPORTUNITY_KEEP = 35;
 
 export type OpportunityBreakdown = {
@@ -156,14 +158,14 @@ export function shouldHardSkipStrongPresence(
 ): boolean {
   const reviews = profile.review_count ?? 0;
   const website = hasRealWebsite(profile.website);
-  const cseUnavailable = !organic || organic.skipped;
-  const reviewCeiling = cseUnavailable ? STRONG_REVIEW_HARD_SKIP_NO_CSE : STRONG_REVIEW_HARD_SKIP;
+  const organicUnavailable = !organic || organic.skipped;
+  const reviewCeiling = organicUnavailable ? STRONG_REVIEW_HARD_SKIP_NO_CSE : STRONG_REVIEW_HARD_SKIP;
 
   if (reviews < reviewCeiling || !website) return false;
 
   // Strong review + website is enough to skip when organic confirms brand presence,
-  // or when organic was skipped (don't queue mid/strong Maps listings without CSE).
-  if (cseUnavailable) return true;
+  // or when organic was skipped (don't queue mid/strong Maps listings without SERP).
+  if (organicUnavailable) return true;
   if (organic.branded_hit === true) return true;
   if (typeof organic.site_total_results === "number" && organic.site_total_results > 50) return true;
   return false;
@@ -171,8 +173,8 @@ export function shouldHardSkipStrongPresence(
 
 /**
  * Keep only closable weak prospects.
- * Without CSE: require a critical Maps gap (no website / <15 reviews / no hours).
- * With CSE: critical gap OR opportunity score ≥ MIN_OPPORTUNITY_KEEP.
+ * Without SERP: require a critical Maps gap (no website / <15 reviews / no hours).
+ * With SERP: critical gap OR opportunity score ≥ MIN_OPPORTUNITY_KEEP.
  */
 export function shouldKeepWeakProspect(
   breakdown: OpportunityBreakdown,
@@ -185,7 +187,7 @@ export function shouldKeepWeakProspect(
 
 export function formatOrganicNotes(organic: OrganicFootprint | null | undefined): string {
   if (!organic) return "Organic: n/a";
-  if (organic.skipped) return `Organic: skipped (${organic.reason || "no CSE"})`;
+  if (organic.skipped) return `Organic: skipped (${organic.reason || "no SERP"})`;
   const site =
     organic.site_total_results == null
       ? "site: n/a"

@@ -1,20 +1,20 @@
 /**
- * Google Custom Search JSON API — site: footprint + branded organic checks.
- * Requires GOOGLE_CSE_CX (Programmable Search Engine ID, entire-web mode).
- * Key: GOOGLE_CSE_API_KEY, else Places / Maps key.
+ * Organic SERP footprint for Hunter weak-presence scoring.
+ * Primary: Serper (SERPER_API_KEY). Fallback: SerpAPI (SERPAPI_API_KEY).
+ * Google Custom Search JSON API is abandoned (closed to new customers).
  */
-import { placesApiKey } from "@/lib/places";
+export type SerpHit = { link: string; title: string; displayLink?: string };
 
-export type CseHit = { link: string; title: string; displayLink?: string };
-
-export type CseSearchResult = {
+export type SerpSearchResult = {
   totalResults: number;
-  items: CseHit[];
+  items: SerpHit[];
+  provider: "serper" | "serpapi";
 };
 
 export type OrganicFootprint = {
   skipped: boolean;
   reason?: string;
+  provider?: "serper" | "serpapi";
   hostname?: string | null;
   site_query?: string;
   site_total_results?: number | null;
@@ -25,20 +25,21 @@ export type OrganicFootprint = {
   fetched_at?: string;
 };
 
-function cseKey(): string {
-  return (
-    process.env.GOOGLE_CSE_API_KEY?.trim() ||
-    placesApiKey() ||
-    ""
-  );
+function serperKey(): string {
+  return process.env.SERPER_API_KEY?.trim() || "";
 }
 
-export function cseCx(): string {
-  return process.env.GOOGLE_CSE_CX?.trim() || "";
+function serpApiKey(): string {
+  return process.env.SERPAPI_API_KEY?.trim() || "";
 }
 
+export function isOrganicSearchConfigured(): boolean {
+  return Boolean(serperKey() || serpApiKey());
+}
+
+/** @deprecated use isOrganicSearchConfigured — kept for call-site compatibility */
 export function isCustomSearchConfigured(): boolean {
-  return Boolean(cseCx() && cseKey());
+  return isOrganicSearchConfigured();
 }
 
 export function hostnameFromUrl(url: string | null | undefined): string | null {
@@ -58,7 +59,6 @@ export function cityHintFromAddressOrQuery(
 ): string {
   if (address?.trim()) {
     const parts = address.split(",").map((p) => p.trim()).filter(Boolean);
-    // "street, City, ST ZIP" → City
     if (parts.length >= 2) {
       const city = parts[parts.length - 2]!;
       if (!/^\d{5}/.test(city) && city.length > 1) return city.replace(/\s+[A-Z]{2}$/, "").trim();
@@ -75,41 +75,96 @@ export function cityHintFromAddressOrQuery(
   return "Salt Lake City";
 }
 
-export async function cseSearch(query: string, num = 5): Promise<CseSearchResult> {
-  const key = cseKey();
-  const cx = cseCx();
-  if (!key || !cx) {
-    throw new Error("Custom Search not configured (need GOOGLE_CSE_CX + API key)");
-  }
+async function serperSearch(query: string, num = 5): Promise<SerpSearchResult> {
+  const key = serperKey();
+  if (!key) throw new Error("SERPER_API_KEY not set");
 
-  const u = new URL("https://www.googleapis.com/customsearch/v1");
-  u.searchParams.set("key", key);
-  u.searchParams.set("cx", cx);
-  u.searchParams.set("q", query);
-  u.searchParams.set("num", String(Math.min(10, Math.max(1, num))));
+  const res = await fetch("https://google.serper.dev/search", {
+    method: "POST",
+    headers: {
+      "X-API-KEY": key,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ q: query, num: Math.min(10, Math.max(1, num)) }),
+    signal: AbortSignal.timeout(15_000),
+  });
 
-  const res = await fetch(u, { signal: AbortSignal.timeout(12_000) });
   const data = (await res.json()) as {
-    error?: { message?: string };
-    searchInformation?: { totalResults?: string };
-    items?: Array<{ link?: string; title?: string; displayLink?: string }>;
+    message?: string;
+    organic?: Array<{ link?: string; title?: string; position?: number }>;
+    searchInformation?: { totalResults?: string | number };
   };
 
-  if (!res.ok || data.error) {
-    throw new Error(`CSE: ${data.error?.message || res.status}`);
+  if (!res.ok) {
+    throw new Error(`Serper: ${data.message || res.status}`);
   }
 
-  const totalRaw = data.searchInformation?.totalResults;
-  const totalResults = totalRaw != null ? parseInt(totalRaw, 10) || 0 : 0;
-  const items: CseHit[] = (data.items ?? [])
+  const items: SerpHit[] = (data.organic ?? [])
     .filter((i) => i.link)
     .map((i) => ({
       link: i.link!,
       title: i.title || "",
-      displayLink: i.displayLink,
+      displayLink: hostnameFromUrl(i.link) || undefined,
     }));
 
-  return { totalResults, items };
+  const raw = data.searchInformation?.totalResults;
+  let totalResults =
+    typeof raw === "number"
+      ? raw
+      : raw != null
+        ? parseInt(String(raw).replace(/,/g, ""), 10) || 0
+        : 0;
+  // site: queries sometimes omit totalResults — use organic hit count as a floor.
+  if (totalResults <= 0 && items.length > 0) totalResults = items.length;
+
+  return { totalResults, items, provider: "serper" };
+}
+
+async function serpApiSearch(query: string, num = 5): Promise<SerpSearchResult> {
+  const key = serpApiKey();
+  if (!key) throw new Error("SERPAPI_API_KEY not set");
+
+  const u = new URL("https://serpapi.com/search.json");
+  u.searchParams.set("engine", "google");
+  u.searchParams.set("q", query);
+  u.searchParams.set("num", String(Math.min(10, Math.max(1, num))));
+  u.searchParams.set("api_key", key);
+
+  const res = await fetch(u, { signal: AbortSignal.timeout(20_000) });
+  const data = (await res.json()) as {
+    error?: string;
+    organic_results?: Array<{ link?: string; title?: string; position?: number }>;
+    search_information?: { total_results?: number | string };
+  };
+
+  if (!res.ok || data.error) {
+    throw new Error(`SerpAPI: ${data.error || res.status}`);
+  }
+
+  const items: SerpHit[] = (data.organic_results ?? [])
+    .filter((i) => i.link)
+    .map((i) => ({
+      link: i.link!,
+      title: i.title || "",
+      displayLink: hostnameFromUrl(i.link) || undefined,
+    }));
+
+  const raw = data.search_information?.total_results;
+  let totalResults =
+    typeof raw === "number"
+      ? raw
+      : raw != null
+        ? parseInt(String(raw).replace(/,/g, ""), 10) || 0
+        : 0;
+  if (totalResults <= 0 && items.length > 0) totalResults = items.length;
+
+  return { totalResults, items, provider: "serpapi" };
+}
+
+export async function serpSearch(query: string, num = 5): Promise<SerpSearchResult> {
+  if (serperKey()) return serperSearch(query, num);
+  if (serpApiKey()) return serpApiSearch(query, num);
+  throw new Error("No SERP key (set SERPER_API_KEY or SERPAPI_API_KEY)");
 }
 
 export async function organicFootprint(input: {
@@ -119,8 +174,12 @@ export async function organicFootprint(input: {
 }): Promise<OrganicFootprint> {
   const fetched_at = new Date().toISOString();
 
-  if (!isCustomSearchConfigured()) {
-    return { skipped: true, reason: "GOOGLE_CSE_CX not set", fetched_at };
+  if (!isOrganicSearchConfigured()) {
+    return {
+      skipped: true,
+      reason: "SERPER_API_KEY (or SERPAPI_API_KEY) not set",
+      fetched_at,
+    };
   }
 
   const hostname = hostnameFromUrl(input.website);
@@ -133,8 +192,9 @@ export async function organicFootprint(input: {
   try {
     if (hostname) {
       out.site_query = `site:${hostname}`;
-      const site = await cseSearch(out.site_query, 3);
+      const site = await serpSearch(out.site_query, 5);
       out.site_total_results = site.totalResults;
+      out.provider = site.provider;
     } else {
       out.site_total_results = null;
       out.site_query = undefined;
@@ -142,7 +202,8 @@ export async function organicFootprint(input: {
 
     const safeName = input.businessName.replace(/"/g, "").trim();
     out.branded_query = `"${safeName}" ${input.city}`.trim();
-    const branded = await cseSearch(out.branded_query, 5);
+    const branded = await serpSearch(out.branded_query, 8);
+    out.provider = branded.provider;
     out.branded_top_links = branded.items.map((i) => i.link);
 
     let rank: number | null = null;
@@ -156,7 +217,11 @@ export async function organicFootprint(input: {
       }
     }
     if (rank == null) {
-      const nameTokens = safeName.toLowerCase().split(/\s+/).filter((t) => t.length > 2).slice(0, 3);
+      const nameTokens = safeName
+        .toLowerCase()
+        .split(/\s+/)
+        .filter((t) => t.length > 2)
+        .slice(0, 3);
       for (let i = 0; i < branded.items.length; i++) {
         const title = (branded.items[i]!.title || "").toLowerCase();
         if (nameTokens.length && nameTokens.every((t) => title.includes(t))) {

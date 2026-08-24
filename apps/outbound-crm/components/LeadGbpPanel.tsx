@@ -102,7 +102,7 @@ function ProfileGrid({ profile }: { profile: LeadProfile }) {
       ) : null}
       <Field label="Organic site: index">
         {profile.organic?.skipped
-          ? `Skipped (${profile.organic.reason || "no CSE"})`
+          ? `Skipped (${profile.organic.reason || "no SERP"})`
           : profile.organic?.site_total_results != null
             ? `≈ ${profile.organic.site_total_results}${profile.organic.hostname ? ` (${profile.organic.hostname})` : ""}`
             : "—"}
@@ -144,8 +144,8 @@ export function LeadGbpPanel({
         </h2>
         <p className="mt-1 text-xs text-slate-500">
           {profile
-            ? "Weak-presence snapshot: GBP fields plus site:/branded organic when CSE is configured."
-            : "No Maps snapshot yet."}
+              ? "Weak-presence snapshot: GBP fields plus site:/branded organic when SERP is configured."
+              : "No Maps snapshot yet."}
         </p>
       </div>
 
