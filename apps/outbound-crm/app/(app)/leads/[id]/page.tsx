@@ -4,12 +4,13 @@ import { notFound } from "next/navigation";
 import {
   addNoteForm,
   logCallAttemptForm,
+  logLadderEventForm,
   updateLeadStatusForm,
 } from "@/app/actions/leads";
 import { LeadGbpPanel } from "@/components/LeadGbpPanel";
 import { createClient } from "@/lib/supabase/server";
 import type { OutboundActivity, OutboundLead } from "@/lib/types";
-import { LEAD_STATUSES } from "@/lib/types";
+import { LADDER_EVENT_TYPES, LEAD_STATUSES } from "@/lib/types";
 import { telHref, isEmailOnlyLead } from "@/lib/phone";
 
 interface PageProps {
@@ -101,6 +102,29 @@ export default async function LeadDetailPage({ params }: PageProps) {
           <pre className="whitespace-pre-wrap font-sans text-sm text-slate-800">{latestReport.note}</pre>
         </section>
       ) : null}
+
+      <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
+          Conversion ladder
+        </h2>
+        <p className="mb-3 text-xs text-slate-500">
+          Track audit → call → retainer. Call booked / retainer also update lead status.
+        </p>
+        <div className="flex flex-wrap gap-2">
+          {LADDER_EVENT_TYPES.map((t) => (
+            <form key={t} action={logLadderEventForm}>
+              <input type="hidden" name="leadId" value={row.id} />
+              <input type="hidden" name="type" value={t} />
+              <button
+                type="submit"
+                className="rounded-lg bg-teal-700 px-3 py-2 text-xs font-semibold capitalize text-white"
+              >
+                {t.replace(/_/g, " ")}
+              </button>
+            </form>
+          ))}
+        </div>
+      </section>
 
       <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">Log call</h2>

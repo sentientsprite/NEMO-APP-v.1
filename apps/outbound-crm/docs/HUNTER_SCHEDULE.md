@@ -65,10 +65,28 @@ Uses [`lib/hunter-sync.ts`](../lib/hunter-sync.ts):
 
 Without `GOOGLE_CSE_CX`, Hunter still prefers weak Maps (no website / low reviews / missing hours) but skips `site:` / branded checks.
 
+### CSE troubleshooting
+
+If organic shows `skipped` / **blocked** / **“does not have the access to Custom Search JSON API”**:
+
+1. Enable **Custom Search API** on the **same GCP project** as `GOOGLE_CSE_API_KEY`
+2. Link **billing** on that project (JSON API requires a billing account even for the free daily quota)
+3. Key restrictions must allow Custom Search API
+4. CX engine = **Search the entire web**
+5. Redeploy `outbound-crm` → **Run Hunter now** → expect `profile.organic.skipped === false`
+
 ### GitHub Actions daily
 
 Workflow: **[`.github/workflows/hunter-daily-outbound-crm.yml`](../../../.github/workflows/hunter-daily-outbound-crm.yml)**  
 Script: **`scripts/hunter-daily-crm-sync.mjs`** — same weak-presence ranking; source `hunter_weak_presence_daily`.
+
+Sync secrets with Vercel (`HUNTER_WEBHOOK_SECRET`, `OUTBOUND_CRM_WEBHOOK_URL`, Places + optional CSE). After `gh auth login`:
+
+```bash
+gh secret set OUTBOUND_CRM_WEBHOOK_URL --body "https://outbound-crm-five.vercel.app/api/webhooks/hunter" -R sentientsprite/NEMO-APP-v.1
+# HUNTER_WEBHOOK_SECRET: paste same value as Vercel Production
+gh secret set HUNTER_WEBHOOK_SECRET -R sentientsprite/NEMO-APP-v.1
+```
 
 Queries: **`scripts/hunter-search-queries.json`**.
 
@@ -106,4 +124,10 @@ Webhook fields: **`README.md`** (Hunter webhook section). Prefer posting `profil
 - Expect **low reviews / no website / thin site:** — not 4.8★ / thousands of reviews.
 - **`503` / `401`** → wrong Vercel env or bearer secret.
 - **`Missing GOOGLE_PLACES_API_KEY`** on **Hunter daily** workflow → expected until billing; use **fixture** workflow instead.
-- CSE errors → check Custom Search API enabled + CX is entire-web.
+- CSE errors → see troubleshooting above.
+
+## Deferred (not blocking dialing / pSEO)
+
+- **LSA detection** — needs SerpAPI-class SERP, not CSE
+- **Cold email** — Resend sandbox / no dedicated sending domain
+- **Blind social auto-post** — use `content_drafts` + human approve (`POST /api/content-drafts/approve`)
