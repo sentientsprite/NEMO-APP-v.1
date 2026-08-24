@@ -8,11 +8,15 @@ import type { OutboundLead } from "@/lib/types";
 
 type Props = {
   lead: Pick<OutboundLead, "id" | "notes" | "profile" | "email" | "name">;
-  /** Compact = Maps panel; default = hero. */
-  variant?: "hero" | "panel";
+  align?: "start" | "end";
+  rerunLabel?: string;
 };
 
-export function RunAuditButton({ lead, variant = "hero" }: Props) {
+export function RunAuditButton({
+  lead,
+  align = "end",
+  rerunLabel = "Run Audit",
+}: Props) {
   const profile = resolveLeadProfile(lead);
   const suggestedZip = extractZip(lead.notes, profile?.address ?? null) ?? "";
   const [zip, setZip] = useState(suggestedZip);
@@ -21,11 +25,6 @@ export function RunAuditButton({ lead, variant = "hero" }: Props) {
     null,
   );
   const [pending, startTransition] = useTransition();
-
-  const btnClass =
-    variant === "panel"
-      ? "inline-flex min-h-[40px] items-center justify-center rounded-xl border border-indigo-300 bg-indigo-50 px-4 py-2 text-sm font-semibold text-indigo-900 disabled:opacity-60"
-      : "inline-flex min-h-[44px] items-center justify-center rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60";
 
   function runAudit() {
     setError(null);
@@ -52,7 +51,6 @@ export function RunAuditButton({ lead, variant = "hero" }: Props) {
           score: json.score ?? null,
           reportUrl: json.reportUrl,
         });
-        // Open PDF without navigating away from the lead page.
         const opened = window.open(json.reportUrl, "_blank", "noopener,noreferrer");
         if (!opened) {
           setError("PDF ready — popup blocked; use Open PDF below.");
@@ -64,9 +62,9 @@ export function RunAuditButton({ lead, variant = "hero" }: Props) {
   }
 
   return (
-    <div className={`flex flex-col gap-2 ${variant === "hero" ? "sm:items-end" : "sm:items-end"}`}>
+    <div className={`flex flex-col gap-2 ${align === "end" ? "sm:items-end" : "items-start"}`}>
       {!suggestedZip ? (
-        <label className="flex w-full max-w-[11rem] flex-col gap-1 text-left text-xs text-slate-600 sm:text-right">
+        <label className="flex w-full max-w-[11rem] flex-col gap-1 text-left text-xs text-slate-600">
           ZIP for audit
           <input
             value={zip}
@@ -79,19 +77,29 @@ export function RunAuditButton({ lead, variant = "hero" }: Props) {
           />
         </label>
       ) : null}
-      <button type="button" onClick={runAudit} disabled={pending} className={btnClass}>
-        {pending ? "Running audit…" : "Run Audit"}
+      <button
+        type="button"
+        onClick={runAudit}
+        disabled={pending}
+        className="inline-flex min-h-[44px] items-center justify-center rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+      >
+        {pending ? "Running audit…" : rerunLabel}
       </button>
       {result ? (
-        <p className="max-w-xs text-right text-xs text-slate-600">
+        <p className="max-w-xs text-xs text-slate-600">
           {result.grade}
           {result.score != null ? ` / ${result.score}` : ""} —{" "}
-          <a href={result.reportUrl} target="_blank" rel="noreferrer" className="font-semibold text-indigo-700 underline">
+          <a
+            href={result.reportUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="font-semibold text-indigo-700 underline"
+          >
             Open PDF
           </a>
         </p>
       ) : null}
-      {error ? <p className="max-w-xs text-right text-xs text-rose-700">{error}</p> : null}
+      {error ? <p className="max-w-xs text-xs text-rose-700">{error}</p> : null}
     </div>
   );
 }
