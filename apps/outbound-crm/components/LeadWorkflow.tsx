@@ -89,7 +89,7 @@ function AuditBadge({ audit }: { audit: AuditStatus }) {
   if (!audit.done) {
     return (
       <span className="inline-flex items-center rounded-full border border-amber-300 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-900">
-        Audit not run
+        Audit not run — no live LVS
       </span>
     );
   }
@@ -99,7 +99,7 @@ function AuditBadge({ audit }: { audit: AuditStatus }) {
       : "done";
   return (
     <span className="inline-flex items-center rounded-full border border-teal-300 bg-teal-50 px-3 py-1 text-xs font-semibold text-teal-900">
-      Audit {score}
+      LVS {score}
     </span>
   );
 }
@@ -219,11 +219,11 @@ export function LeadWorkflow({
               Open PDF
               {audit.grade ? ` (${audit.grade}${audit.score != null ? `/${audit.score}` : ""})` : ""}
             </a>
-            <span className="text-xs text-teal-800">Audit on file</span>
+            <span className="text-xs text-teal-800">LVS on file</span>
           </div>
         ) : (
           <p className="mb-3 text-sm font-medium text-amber-900">
-            No audit yet — run it before you dial so the call track has a real opener.
+            No LVS yet — run it before you dial so the call track has a real opener.
           </p>
         )}
         <RunAuditButton lead={lead} align="start" rerunLabel={audit.done ? "Re-run Audit" : "Run Audit"} />

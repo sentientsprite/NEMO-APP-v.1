@@ -97,8 +97,26 @@ function ProfileGrid({ profile }: { profile: LeadProfile }) {
           {new Date(profile.fetched_at).toLocaleString()}
         </Field>
       ) : null}
+      {profile.lvs?.grade ? (
+        <Field label="LVS audit (CRM score)">
+          {profile.lvs.grade}
+          {typeof profile.lvs.score === "number" ? ` / ${profile.lvs.score}` : ""}
+          {profile.lvs.reportUrl ? (
+            <>
+              {" · "}
+              <a href={profile.lvs.reportUrl} target="_blank" rel="noreferrer" className="text-indigo-600 underline">
+                PDF
+              </a>
+            </>
+          ) : null}
+        </Field>
+      ) : (
+        <Field label="LVS audit (CRM score)">
+          <span className="font-medium text-amber-800">Not run — Hunter grade is not the audit</span>
+        </Field>
+      )}
       {profile.estimated_grade ? (
-        <Field label="Hunter grade">{profile.estimated_grade} (keep C/D/F)</Field>
+        <Field label="Hunter estimate">{profile.estimated_grade} (Maps/SERP guess, not LVS)</Field>
       ) : null}
       {profile.opportunity_score != null ? (
         <Field label="Opportunity score">{profile.opportunity_score}/100 (higher = weaker presence)</Field>

@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 import { RunHunterWorkflowButton } from "@/components/RunHunterWorkflowButton";
-import { auditHintFromNotes, leadChannel } from "@/lib/lead-ux";
+import { auditHintFromLead, leadChannel } from "@/lib/lead-ux";
 import { createClient } from "@/lib/supabase/server";
 import type { OutboundLead } from "@/lib/types";
 import { isLeadStatus, LEAD_STATUSES } from "@/lib/types";
@@ -110,7 +110,7 @@ export default async function QueuePage({ searchParams }: PageProps) {
         ) : (
           rows.map((lead) => {
             const channel = leadChannel(lead);
-            const audit = auditHintFromNotes(lead.notes);
+            const audit = auditHintFromLead(lead);
             const mailto = lead.email
               ? `mailto:${encodeURIComponent(lead.email)}?subject=${encodeURIComponent(`Prana — ${lead.name}`)}`
               : null;

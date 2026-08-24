@@ -4,14 +4,23 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import {
-  buildPreCallGaps,
-  formatPreCallReportMarkdown,
   resolveLeadProfile,
   type LeadProfile,
 } from "@/lib/lead-profile";
 import { fetchPlaceDetails, placeDetailsToProfile } from "@/lib/places";
+import {
+  buildAuditPayload,
+  fetchLiveLvs,
+  mergeLvsIntoProfile,
+  notesWithLvsLine,
+  snapshotFromLvs,
+} from "@/lib/run-audit";
+import {
+  buildCallTrackFromAudit,
+  formatAuditCallTrackMarkdown,
+} from "@/lib/call-track-from-audit";
 import { createClient } from "@/lib/supabase/server";
-import type { LadderEventType, LeadStatus } from "@/lib/types";
+import type { LadderEventType, LeadStatus, OutboundLead } from "@/lib/types";
 import { isLadderEventType, isLeadStatus } from "@/lib/types";
 
 async function requireUser() {
@@ -114,8 +123,8 @@ async function addLeadNote(leadId: string, note: string) {
 }
 
 /**
- * Refresh Maps/GBP fields when possible, then write a pre-call gap checklist
- * as an activity the rep can read before dialing.
+ * Refresh Maps/GBP fields when possible, then always check live LVS.
+ * The Local Visibility Score is the CRM audit score (Hunter grade is an estimate).
  */
 export async function generatePreCallReport(leadId: string): Promise<{ ok: true } | { ok: false; error: string }> {
   const { supabase, user } = await requireUser();
@@ -141,33 +150,53 @@ export async function generatePreCallReport(leadId: string): Promise<{ ok: true 
     try {
       const det = await fetchPlaceDetails(placeId);
       if (det) {
-        profile = placeDetailsToProfile(det, { maps_query: profile?.maps_query ?? null });
+        const fresh = placeDetailsToProfile(det, { maps_query: profile?.maps_query ?? null });
+        profile = { ...(profile ?? {}), ...fresh };
         refreshed = true;
-        const { error: upErr } = await supabase
-          .from("outbound_leads")
-          .update({ profile })
-          .eq("id", leadId);
-        if (upErr) return { ok: false, error: upErr.message };
       }
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Places refresh failed";
       if (!profile) return { ok: false, error: msg };
-      // Keep stale profile and still produce a checklist.
     }
   }
 
-  if (!profile) {
+  const payload = buildAuditPayload(
+    {
+      name: lead.name,
+      email: lead.email,
+      notes: lead.notes,
+      profile: (profile ?? lead.profile) as OutboundLead["profile"],
+    },
+    null,
+  );
+  if (!payload.ok) {
     return {
       ok: false,
-      error:
-        "No Google Place ID on this lead. Hunter Places leads (google_place:…) can refresh; others need a Maps snapshot first.",
+      error: `${payload.error} Live LVS is the CRM audit score.`,
     };
   }
 
-  const gaps = buildPreCallGaps(profile, { email: lead.email, phone: lead.phone });
-  const markdown = formatPreCallReportMarkdown({
+  const fetched = await fetchLiveLvs(payload.body);
+  if (!fetched.ok) return { ok: false, error: fetched.error };
+
+  const snap = snapshotFromLvs(fetched.json, payload.body.zip);
+  if (!snap) return { ok: false, error: "LVS returned no report URL" };
+
+  const nextProfile = mergeLvsIntoProfile(profile, snap) as LeadProfile;
+  const nextNotes = notesWithLvsLine(lead.notes, snap);
+  const { error: upErr } = await supabase
+    .from("outbound_leads")
+    .update({ profile: nextProfile, notes: nextNotes })
+    .eq("id", leadId);
+  if (upErr) return { ok: false, error: upErr.message };
+
+  const gaps = buildCallTrackFromAudit(fetched.json);
+  const markdown = formatAuditCallTrackMarkdown({
     businessName: lead.name,
-    profile,
+    grade: snap.grade,
+    score: snap.score,
+    reportUrl: snap.reportUrl,
+    headline: fetched.json.headline,
     gaps,
   });
 
@@ -176,10 +205,16 @@ export async function generatePreCallReport(leadId: string): Promise<{ ok: true 
     type: "pre_call_report",
     note: markdown,
     meta: {
+      from_audit: true,
+      lvs_audit: true,
+      grade: snap.grade,
+      score: snap.score,
+      reportUrl: snap.reportUrl,
       gap_ids: gaps.map((g) => g.id),
-      gap_count: gaps.length,
+      gaps,
       refreshed_from_places: refreshed,
-      place_id: profile.place_id ?? null,
+      place_id: nextProfile.place_id ?? null,
+      top_fix_title: snap.topFixTitle ?? null,
     },
     created_by: user.id,
   });

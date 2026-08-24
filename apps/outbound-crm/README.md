@@ -46,6 +46,8 @@ Quick recap:
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Client + server | Supabase anon key (RLS) |
 | `SUPABASE_SERVICE_ROLE_KEY` | Server only | Webhook inserts; never commit |
 | `HUNTER_WEBHOOK_SECRET` | Server only | `Authorization: Bearer …` on webhook |
+| `LVS_APP_URL` | Server only | Live LVS host (default `https://nemo-app-v-1.vercel.app`) |
+| `LVS_AUDIT_EMAIL` | Server only | Callback email for CRM-initiated LVS (do not use the prospect) |
 
 Optional — **Run Hunter now** on `/queue` (authenticated rep only; secrets never exposed to the browser):
 
@@ -73,6 +75,8 @@ Add **Settings → Environment Variables** on that project:
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Same |
 | `SUPABASE_SERVICE_ROLE_KEY` | Same — server-only, never expose to client |
 | `HUNTER_WEBHOOK_SECRET` | Same |
+| `LVS_APP_URL` | Same — optional; live LVS host for the CRM audit score |
+| `LVS_AUDIT_EMAIL` | Same — required for Hunter leads without a real email |
 | `HUNTER_DISPATCH_WEBHOOK_URL` | Same — optional; **Run Hunter now** button |
 | `HUNTER_DISPATCH_WEBHOOK_SECRET` | Same — optional Bearer for that URL |
 | `HUNTER_GITHUB_DISPATCH_TOKEN` | Same — optional; direct GitHub `workflow_dispatch` |
@@ -171,6 +175,7 @@ Full webhook contract + dedupe rules: **`README.md`** (this folder). **Daily aut
 | Activity log | `call_attempt`, `note`, `status_change` — append-only |
 | Queue | Default: latest **new** leads (limit 10); filters: status, source, search, limit |
 | Lead detail | Prominent **`tel:`**; **`mailto:`** if email; one-click voicemail log; status buttons; notes |
+| Audit score | **Live LVS** (`POST /api/lvs`) stored on `profile.lvs`. Queue badge and playbook use this — not Hunter `estimated_grade`. |
 
 ## Non-goals (v1)
 

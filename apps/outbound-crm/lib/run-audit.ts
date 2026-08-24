@@ -45,7 +45,12 @@ export function buildAuditPayload(
   | { ok: true; body: { email: string; businessName: string; zip: string; websiteUrl?: string } }
   | { ok: false; error: string } {
   const profile = resolveLeadProfile(lead);
-  const zip = (zipOverride?.trim() || extractZip(lead.notes, profile?.address ?? null) || "").trim();
+  const zip = (
+    zipOverride?.trim() ||
+    extractZip(lead.notes, profile?.address ?? null) ||
+    profile?.lvs?.zip ||
+    ""
+  ).trim();
   if (!/^\d{5}(-\d{4})?$/.test(zip)) {
     return {
       ok: false,
@@ -99,3 +104,116 @@ export type LvsAuditResponse = {
   detail?: string;
   hint?: string;
 };
+
+export type LvsSnapshot = {
+  grade: string;
+  score: number | null;
+  reportUrl: string;
+  checked_at: string;
+  zip?: string;
+  topFixTitle?: string | null;
+  headline?: string | null;
+};
+
+export function snapshotFromLvs(lvs: LvsAuditResponse, zip?: string): LvsSnapshot | null {
+  if (!lvs.ok || !lvs.reportUrl) return null;
+  return {
+    grade: lvs.grade ?? "?",
+    score: typeof lvs.score === "number" ? lvs.score : null,
+    reportUrl: lvs.reportUrl,
+    checked_at: new Date().toISOString(),
+    zip,
+    topFixTitle: lvs.topFix?.title ?? null,
+    headline: lvs.headline ?? null,
+  };
+}
+
+export function mergeLvsIntoProfile(
+  profile: unknown,
+  snap: LvsSnapshot,
+): Record<string, unknown> {
+  const base =
+    profile && typeof profile === "object" && !Array.isArray(profile)
+      ? { ...(profile as Record<string, unknown>) }
+      : {};
+  base.lvs = snap;
+  return base;
+}
+
+/** Parse a live LVS snapshot from notes. Ignores Hunter `Grade: C (SERP-proven…)`. */
+export function lvsSnapshotFromNotes(notes: string | null | undefined): LvsSnapshot | null {
+  if (!notes?.trim()) return null;
+  const reportUrl = reportUrlFromNotes(notes);
+  const lvsLine = notes.match(/\bLVS:\s*([A-F][+-]?)\/(\d+|—|-)/i);
+  const wedgeMatch = /LVS wedge/i.test(notes)
+    ? notes.match(/Grade:\s*([A-F][+-]?)\s*\((\d+)\s*\/\s*100\)/i)
+    : null;
+  const zip = notes.match(/\bZIP:\s*(\d{5})\b/i)?.[1];
+  const topFixTitle = notes.match(/Top fix:\s*(.+)/i)?.[1]?.trim() ?? null;
+
+  const grade = lvsLine?.[1] ?? wedgeMatch?.[1] ?? null;
+  const rawScore = lvsLine?.[2] ?? wedgeMatch?.[2] ?? null;
+  const score = rawScore && /^\d+$/.test(rawScore) ? parseInt(rawScore, 10) : null;
+
+  if (!lvsLine && !wedgeMatch && !reportUrl) return null;
+
+  return {
+    grade: grade ?? "?",
+    score,
+    reportUrl: reportUrl ?? "",
+    checked_at: "",
+    zip,
+    topFixTitle,
+    headline: null,
+  };
+}
+
+export function notesWithLvsLine(notes: string | null | undefined, snap: LvsSnapshot): string {
+  const existing = (notes ?? "").trim();
+  const withoutOld = existing
+    .split(/\n+/)
+    .filter((line) => !/^Report:\s*https?:\/\//i.test(line.trim()) && !/^LVS:\s*/i.test(line.trim()))
+    .join("\n")
+    .trim();
+  return [withoutOld, `Report: ${snap.reportUrl}`, `LVS: ${snap.grade}/${snap.score ?? "—"}`]
+    .filter(Boolean)
+    .join("\n");
+}
+
+export function attachLvsToInboundProfile(
+  source: string,
+  notes: string | null | undefined,
+  profile: Record<string, unknown> | undefined,
+): Record<string, unknown> | undefined {
+  const existing = profile?.lvs;
+  if (existing && typeof existing === "object" && existing !== null) {
+    return profile;
+  }
+  if (source !== "lvs_wedge" && source !== "spryte_audit") return profile;
+  const snap = lvsSnapshotFromNotes(notes);
+  if (!snap) return profile;
+  return mergeLvsIntoProfile(profile, snap);
+}
+
+export async function fetchLiveLvs(
+  body: { email: string; businessName: string; zip: string; websiteUrl?: string },
+): Promise<{ ok: true; json: LvsAuditResponse } | { ok: false; error: string }> {
+  try {
+    const res = await fetch(`${lvsAppBase()}/api/lvs`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(55_000),
+    });
+    const json = (await res.json()) as LvsAuditResponse;
+    if (!res.ok || !json.ok || !json.reportUrl) {
+      return {
+        ok: false,
+        error: json.detail || json.error || json.hint || `LVS returned ${res.status}`,
+      };
+    }
+    return { ok: true, json };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "LVS request failed" };
+  }
+}

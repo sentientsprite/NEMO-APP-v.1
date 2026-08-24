@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { normalizePhone } from "@/lib/phone";
 import { bearerMatchesSecret } from "@/lib/webhook-auth";
+import { attachLvsToInboundProfile } from "@/lib/run-audit";
 
 export const runtime = "nodejs";
 
@@ -61,13 +62,14 @@ export async function POST(request: Request) {
   const email = typeof body.email === "string" ? body.email.trim() : undefined;
   const notes = typeof body.notes === "string" ? body.notes.trim() : undefined;
   const external_id = typeof body.external_id === "string" ? body.external_id.trim() : undefined;
-  const profile =
+  const inboundProfile =
     typeof body.profile === "object" && body.profile !== null && !Array.isArray(body.profile)
       ? (body.profile as Record<string, unknown>)
       : undefined;
 
   const isLvsWedge = source === "lvs_wedge";
   const isSpryteAudit = source === "spryte_audit";
+  const profile = attachLvsToInboundProfile(source, notes, inboundProfile);
 
   if (!name || !source) {
     return NextResponse.json({ error: "invalid_input", detail: "name and source are required" }, { status: 400 });

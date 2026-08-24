@@ -7,9 +7,11 @@ import {
 import { resolveLeadProfile } from "@/lib/lead-profile";
 import {
   buildAuditPayload,
-  lvsAppBase,
+  fetchLiveLvs,
+  mergeLvsIntoProfile,
+  notesWithLvsLine,
   reportUrlFromNotes,
-  type LvsAuditResponse,
+  snapshotFromLvs,
 } from "@/lib/run-audit";
 import { createClient } from "@/lib/supabase/server";
 import type { OutboundLead } from "@/lib/types";
@@ -60,37 +62,15 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: payload.error }, { status: 400 });
   }
 
-  const lvsUrl = `${lvsAppBase()}/api/lvs`;
-  let lvsJson: LvsAuditResponse;
-  try {
-    const res = await fetch(lvsUrl, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(payload.body),
-      signal: AbortSignal.timeout(55_000),
-    });
-    lvsJson = (await res.json()) as LvsAuditResponse;
-    if (!res.ok || !lvsJson.ok || !lvsJson.reportUrl) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error:
-            lvsJson.detail ||
-            lvsJson.error ||
-            lvsJson.hint ||
-            `LVS returned ${res.status}`,
-        },
-        { status: 502 },
-      );
-    }
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : "LVS request failed";
-    return NextResponse.json({ ok: false, error: msg }, { status: 502 });
+  const fetched = await fetchLiveLvs(payload.body);
+  if (!fetched.ok) {
+    return NextResponse.json({ ok: false, error: fetched.error }, { status: 502 });
   }
+  const lvsJson = fetched.json;
 
   const grade = lvsJson.grade ?? "?";
   const score = lvsJson.score ?? null;
-  const reportUrl = lvsJson.reportUrl;
+  const reportUrl = lvsJson.reportUrl as string;
   const gaps = buildCallTrackFromAudit(lvsJson);
   const callTrackMd = formatAuditCallTrackMarkdown({
     businessName: row.name,
@@ -143,17 +123,16 @@ export async function POST(req: Request) {
     },
   ]);
 
-  const existing = (row.notes ?? "").trim();
-  const withoutOldReport = existing
-    .split(/\n+/)
-    .filter((line) => !/^Report:\s*https?:\/\//i.test(line.trim()) && !/^LVS:\s*/i.test(line.trim()))
-    .join("\n")
-    .trim();
-  const nextNotes = [withoutOldReport, `Report: ${reportUrl}`, `LVS: ${grade}/${score ?? "—"}`]
-    .filter(Boolean)
-    .join("\n");
+  const snap = snapshotFromLvs(lvsJson, payload.body.zip);
+  const nextNotes = snap ? notesWithLvsLine(row.notes, snap) : row.notes;
+  const nextProfile = snap
+    ? mergeLvsIntoProfile((row.profile as Record<string, unknown> | null) ?? null, snap)
+    : row.profile;
 
-  await supabase.from("outbound_leads").update({ notes: nextNotes }).eq("id", leadId);
+  await supabase
+    .from("outbound_leads")
+    .update({ notes: nextNotes, profile: nextProfile })
+    .eq("id", leadId);
 
   return NextResponse.json({
     ok: true,

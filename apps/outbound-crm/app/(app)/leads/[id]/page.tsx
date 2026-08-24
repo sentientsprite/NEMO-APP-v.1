@@ -5,6 +5,8 @@ import { LeadWorkflow } from "@/components/LeadWorkflow";
 import { createClient } from "@/lib/supabase/server";
 import type { OutboundActivity, OutboundLead } from "@/lib/types";
 
+export const maxDuration = 60;
+
 interface PageProps {
   params: Promise<{ id: string }>;
 }

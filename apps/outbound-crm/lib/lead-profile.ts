@@ -34,6 +34,16 @@ export interface LeadProfile {
   opportunity_score?: number | null;
   /** Hunter estimate — LVS-style A–F from Maps/organic surface (keep C/D/F). */
   estimated_grade?: "A" | "B" | "C" | "D" | "F" | null;
+  /** Live Local Visibility Score from POST /api/lvs — this is the CRM audit score. */
+  lvs?: {
+    grade: string;
+    score: number | null;
+    reportUrl: string;
+    checked_at: string;
+    zip?: string;
+    topFixTitle?: string | null;
+    headline?: string | null;
+  } | null;
   /** Sellable Nemo package ids inferred at hunt time. */
   service_packages?: string[] | null;
 }
@@ -235,8 +245,17 @@ export function formatPreCallReportMarkdown(input: {
   gaps: PreCallGap[];
 }): string {
   const { businessName, profile, gaps } = input;
+  const lvs = profile.lvs;
   const lines: string[] = [
     `# Pre-call report — ${businessName}`,
+    "",
+    "## Local Visibility Score (CRM audit)",
+    lvs?.grade
+      ? `- LVS: ${lvs.grade}${typeof lvs.score === "number" ? ` / ${lvs.score}` : ""}`
+      : "- LVS: not run — Hunter estimated_grade is not the audit score",
+    lvs?.reportUrl ? `- PDF: ${lvs.reportUrl}` : "- PDF: —",
+    ...(lvs?.topFixTitle ? [`- Top fix: ${lvs.topFixTitle}`] : []),
+    ...(lvs?.checked_at ? [`- Checked: ${lvs.checked_at}`] : []),
     "",
     "## Google / Maps snapshot",
     `- Place ID: ${profile.place_id ?? "—"}`,
@@ -248,6 +267,7 @@ export function formatPreCallReportMarkdown(input: {
     `- Photos on file: ${profile.photo_count ?? "—"}`,
     `- Types: ${(profile.types ?? []).slice(0, 8).join(", ") || "—"}`,
     `- Maps query: ${profile.maps_query ?? "—"}`,
+    `- Hunter estimate (not LVS): ${profile.estimated_grade ?? "—"}`,
     "",
     "## Organic (Custom Search)",
     `- site: results: ${profile.organic?.skipped ? `skipped (${profile.organic.reason || "—"})` : (profile.organic?.site_total_results ?? "—")}`,
@@ -272,6 +292,6 @@ export function formatPreCallReportMarkdown(input: {
   }
 
   lines.push("---");
-  lines.push("Offer: run Local Visibility Score (name + ZIP) → scorecard + PDF before pitching retainers.");
+  lines.push("Offer: walk the live Local Visibility Score PDF — that grade is the CRM audit score.");
   return lines.join("\n");
 }
