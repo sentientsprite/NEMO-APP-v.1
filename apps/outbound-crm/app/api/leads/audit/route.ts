@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
 
+import {
+  buildCallTrackFromAudit,
+  formatAuditCallTrackMarkdown,
+} from "@/lib/call-track-from-audit";
 import { resolveLeadProfile } from "@/lib/lead-profile";
 import {
   buildAuditPayload,
@@ -16,7 +20,7 @@ export const maxDuration = 60;
 /**
  * POST /api/leads/audit
  * Body: { leadId: string, zip?: string }
- * Runs LVS on the lead (server → nemo /api/lvs), logs activity + Report URL, returns PDF URL.
+ * Runs LVS, returns PDF URL, and writes call track from audit top fixes.
  */
 export async function POST(req: Request) {
   const supabase = await createClient();
@@ -87,32 +91,62 @@ export async function POST(req: Request) {
   const grade = lvsJson.grade ?? "?";
   const score = lvsJson.score ?? null;
   const reportUrl = lvsJson.reportUrl;
+  const gaps = buildCallTrackFromAudit(lvsJson);
+  const callTrackMd = formatAuditCallTrackMarkdown({
+    businessName: row.name,
+    grade,
+    score,
+    reportUrl,
+    headline: lvsJson.headline,
+    gaps,
+  });
 
   const summary = [
     `LVS audit: ${grade}${score != null ? ` / ${score}` : ""}`,
     `Report: ${reportUrl}`,
     `ZIP: ${payload.body.zip}`,
-  ].join("\n");
+    lvsJson.topFix?.title ? `Top fix: ${lvsJson.topFix.title}` : null,
+  ]
+    .filter(Boolean)
+    .join("\n");
 
-  await supabase.from("outbound_activities").insert({
-    lead_id: leadId,
-    type: "note",
-    note: summary,
-    meta: {
-      lvs_audit: true,
-      grade,
-      score,
-      reportUrl,
-      zip: payload.body.zip,
+  await supabase.from("outbound_activities").insert([
+    {
+      lead_id: leadId,
+      type: "note",
+      note: summary,
+      meta: {
+        lvs_audit: true,
+        grade,
+        score,
+        reportUrl,
+        zip: payload.body.zip,
+        topFix: lvsJson.topFix ?? null,
+        headline: lvsJson.headline ?? null,
+      },
+      created_by: user.id,
     },
-    created_by: user.id,
-  });
+    {
+      lead_id: leadId,
+      type: "pre_call_report",
+      note: callTrackMd,
+      meta: {
+        from_audit: true,
+        grade,
+        score,
+        reportUrl,
+        gap_ids: gaps.map((g) => g.id),
+        gaps,
+        top_fix_title: lvsJson.topFix?.title ?? null,
+      },
+      created_by: user.id,
+    },
+  ]);
 
-  // Keep Report: URL on the lead notes so Open PDF stays available after refresh.
   const existing = (row.notes ?? "").trim();
   const withoutOldReport = existing
     .split(/\n+/)
-    .filter((line) => !/^Report:\s*https?:\/\//i.test(line.trim()))
+    .filter((line) => !/^Report:\s*https?:\/\//i.test(line.trim()) && !/^LVS:\s*/i.test(line.trim()))
     .join("\n")
     .trim();
   const nextNotes = [withoutOldReport, `Report: ${reportUrl}`, `LVS: ${grade}/${score ?? "—"}`]
@@ -126,6 +160,10 @@ export async function POST(req: Request) {
     grade,
     score,
     reportUrl,
+    headline: lvsJson.headline ?? null,
+    topFix: lvsJson.topFix ?? null,
+    gaps,
+    callTrackMarkdown: callTrackMd,
     hadPriorReport: Boolean(reportUrlFromNotes(row.notes)),
     placeId: resolveLeadProfile(row)?.place_id ?? null,
   });

@@ -5,19 +5,9 @@ import {
   updateLeadStatusForm,
 } from "@/app/actions/leads";
 import { LeadGbpPanel } from "@/components/LeadGbpPanel";
-import { PreCallReportButton } from "@/components/PreCallReportButton";
 import { RunAuditButton } from "@/components/RunAuditButton";
-import {
-  buildPreCallGaps,
-  resolveLeadProfile,
-  type PreCallGap,
-} from "@/lib/lead-profile";
-import {
-  canGenerateCallTrack,
-  leadChannel,
-  resolveAuditStatus,
-  type AuditStatus,
-} from "@/lib/lead-ux";
+import { resolveLeadProfile, type PreCallGap } from "@/lib/lead-profile";
+import { leadChannel, resolveAuditStatus, type AuditStatus } from "@/lib/lead-ux";
 import { telHref } from "@/lib/phone";
 import type { OutboundActivity, OutboundLead } from "@/lib/types";
 import { LADDER_EVENT_TYPES, LEAD_STATUSES } from "@/lib/types";
@@ -65,19 +55,27 @@ function StepShell({
 function GapList({ gaps }: { gaps: PreCallGap[] }) {
   return (
     <ul className="mt-3 space-y-2">
-      {gaps.map((g) => (
+      {gaps.map((g, i) => (
         <li
           key={g.id}
           className={`rounded-lg border px-3 py-2 text-sm ${
-            g.severity === "critical"
-              ? "border-rose-200 bg-rose-50"
-              : g.severity === "warning"
-                ? "border-amber-200 bg-amber-50"
-                : "border-slate-200 bg-slate-50"
+            i === 0
+              ? "border-rose-300 bg-rose-50 ring-1 ring-rose-200"
+              : g.severity === "critical"
+                ? "border-rose-200 bg-rose-50"
+                : g.severity === "warning"
+                  ? "border-amber-200 bg-amber-50"
+                  : "border-slate-200 bg-slate-50"
           }`}
         >
           <p className="font-semibold text-slate-900">
-            <span className="mr-2 text-xs uppercase tracking-wide text-slate-500">{g.severity}</span>
+            {i === 0 ? (
+              <span className="mr-2 text-xs font-bold uppercase tracking-wide text-rose-700">
+                Open with this
+              </span>
+            ) : (
+              <span className="mr-2 text-xs uppercase tracking-wide text-slate-500">{g.severity}</span>
+            )}
             {g.title}
           </p>
           <p className="mt-1 text-slate-700">{g.talk_track}</p>
@@ -121,6 +119,19 @@ function ChannelBadge({ channel }: { channel: "call" | "email" }) {
   );
 }
 
+function gapsFromCallTrackActivity(activity: OutboundActivity | undefined): PreCallGap[] {
+  if (!activity?.meta || typeof activity.meta !== "object") return [];
+  const raw = (activity.meta as { gaps?: unknown }).gaps;
+  if (!Array.isArray(raw)) return [];
+  return raw.filter(
+    (g): g is PreCallGap =>
+      Boolean(g) &&
+      typeof g === "object" &&
+      typeof (g as PreCallGap).title === "string" &&
+      typeof (g as PreCallGap).talk_track === "string",
+  );
+}
+
 export function LeadWorkflow({
   lead,
   activities,
@@ -131,18 +142,16 @@ export function LeadWorkflow({
   const channel = leadChannel(lead);
   const audit = resolveAuditStatus(lead, activities);
   const profile = resolveLeadProfile(lead);
-  const gaps = profile ? buildPreCallGaps(profile, { email: lead.email, phone: lead.phone }) : [];
-  const showCallTrack = canGenerateCallTrack(lead);
   const mailto = lead.email
     ? `mailto:${encodeURIComponent(lead.email)}?subject=${encodeURIComponent(`Prana — ${lead.name}`)}`
     : null;
   const latestReport = activities.find((a) => a.type === "pre_call_report");
+  const gaps = gapsFromCallTrackActivity(latestReport);
 
   let step = 1;
 
   return (
     <div className="space-y-4">
-      {/* Top summary — who + channel + audit */}
       <header
         className={`rounded-2xl border p-5 shadow-sm ${
           channel === "email" ? "border-violet-200 bg-violet-50/50" : "border-emerald-200 bg-emerald-50/40"
@@ -189,13 +198,64 @@ export function LeadWorkflow({
         ) : null}
       </header>
 
+      <StepShell
+        n={step++}
+        title="Run Audit"
+        hint={
+          audit.done
+            ? "Already run — opens PDF and refreshes the call track from the latest scorecard."
+            : "First: run the Local Visibility Score. This writes your call track automatically."
+        }
+        accent="indigo"
+      >
+        {audit.done && audit.reportUrl ? (
+          <div className="mb-3 flex flex-wrap items-center gap-3">
+            <a
+              href={audit.reportUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex min-h-[44px] items-center justify-center rounded-xl border border-indigo-300 bg-white px-4 py-2 text-sm font-semibold text-indigo-900"
+            >
+              Open PDF
+              {audit.grade ? ` (${audit.grade}${audit.score != null ? `/${audit.score}` : ""})` : ""}
+            </a>
+            <span className="text-xs text-teal-800">Audit on file</span>
+          </div>
+        ) : (
+          <p className="mb-3 text-sm font-medium text-amber-900">
+            No audit yet — run it before you dial so the call track has a real opener.
+          </p>
+        )}
+        <RunAuditButton lead={lead} align="start" rerunLabel={audit.done ? "Re-run Audit" : "Run Audit"} />
+      </StepShell>
+
+      <StepShell
+        n={step++}
+        title="Call track"
+        hint="Built from the audit. Point #1 is the top fix — lead the call with it."
+        accent="amber"
+      >
+        {gaps.length > 0 ? (
+          <GapList gaps={gaps} />
+        ) : (
+          <p className="text-sm text-slate-600">
+            Run Audit above first. Talking points appear here from the scorecard (top fix first).
+          </p>
+        )}
+        {latestReport?.note ? (
+          <details className="mt-3 rounded-lg border border-amber-200 bg-white p-3">
+            <summary className="cursor-pointer text-sm font-semibold text-amber-900">
+              Full call track notes
+            </summary>
+            <pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap font-sans text-xs text-slate-800">
+              {latestReport.note}
+            </pre>
+          </details>
+        ) : null}
+      </StepShell>
+
       {channel === "call" ? (
-        <StepShell
-          n={step++}
-          title="Call"
-          hint="Primary action — dial first."
-          accent="emerald"
-        >
+        <StepShell n={step++} title="Call" hint="Dial with talking point #1 ready." accent="emerald">
           <a
             href={telHref(lead.phone_normalized)}
             className="inline-flex min-h-[52px] w-full items-center justify-center rounded-xl bg-emerald-600 px-6 py-3 text-lg font-bold text-white sm:w-auto"
@@ -255,68 +315,7 @@ export function LeadWorkflow({
         )}
       </StepShell>
 
-      <StepShell
-        n={step++}
-        title="Call track"
-        hint="Gaps to mention on the dial — generate if empty or stale."
-        accent="amber"
-      >
-        {showCallTrack ? (
-          <div className="mb-3">
-            <PreCallReportButton leadId={lead.id} label="Refresh call track" />
-          </div>
-        ) : (
-          <p className="mb-3 text-sm text-slate-600">
-            No Maps Place ID yet. Skip to Run Audit for a full scorecard, or wait for Hunter Places data.
-          </p>
-        )}
-        {gaps.length > 0 ? <GapList gaps={gaps} /> : null}
-        {latestReport?.note ? (
-          <details className="mt-3 rounded-lg border border-amber-200 bg-white p-3">
-            <summary className="cursor-pointer text-sm font-semibold text-amber-900">
-              Full pre-call report
-            </summary>
-            <pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap font-sans text-xs text-slate-800">
-              {latestReport.note}
-            </pre>
-          </details>
-        ) : null}
-      </StepShell>
-
-      <StepShell
-        n={step++}
-        title="Run Audit"
-        hint={
-          audit.done
-            ? "Already run — open the PDF or re-run if the listing changed."
-            : "Full Local Visibility Score + PDF. Stays on this page."
-        }
-        accent="indigo"
-      >
-        {audit.done && audit.reportUrl ? (
-          <div className="mb-3 flex flex-wrap items-center gap-3">
-            <a
-              href={audit.reportUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex min-h-[44px] items-center justify-center rounded-xl border border-indigo-300 bg-white px-4 py-2 text-sm font-semibold text-indigo-900"
-            >
-              Open PDF
-              {audit.grade ? ` (${audit.grade}${audit.score != null ? `/${audit.score}` : ""})` : ""}
-            </a>
-            <span className="text-xs text-teal-800">Audit on file</span>
-          </div>
-        ) : (
-          <p className="mb-3 text-sm font-medium text-amber-900">No audit PDF yet for this lead.</p>
-        )}
-        <RunAuditButton lead={lead} align="start" rerunLabel={audit.done ? "Re-run Audit" : "Run Audit"} />
-      </StepShell>
-
-      <StepShell
-        n={step++}
-        title="Log outcome"
-        hint="Mark progress after the conversation."
-      >
+      <StepShell n={step++} title="Log outcome" hint="Mark progress after the conversation.">
         <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
           Conversion ladder
         </p>
