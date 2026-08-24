@@ -8,6 +8,7 @@ import {
   updateLeadStatusForm,
 } from "@/app/actions/leads";
 import { LeadGbpPanel } from "@/components/LeadGbpPanel";
+import { LeadSalesActions } from "@/components/LeadSalesActions";
 import { createClient } from "@/lib/supabase/server";
 import type { OutboundActivity, OutboundLead } from "@/lib/types";
 import { LADDER_EVENT_TYPES, LEAD_STATUSES } from "@/lib/types";
@@ -88,6 +89,7 @@ export default async function LeadDetailPage({ params }: PageProps) {
                 Email (mailto)
               </a>
             ) : null}
+            <LeadSalesActions lead={row} />
           </div>
         </div>
       </div>
@@ -97,7 +99,7 @@ export default async function LeadDetailPage({ params }: PageProps) {
       {latestReport?.note ? (
         <section className="rounded-2xl border border-amber-200 bg-amber-50/60 p-4 shadow-sm">
           <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-amber-900">
-            Latest pre-call report
+            Latest call track
           </h2>
           <pre className="whitespace-pre-wrap font-sans text-sm text-slate-800">{latestReport.note}</pre>
         </section>

@@ -5,6 +5,7 @@ import {
   type PreCallGap,
 } from "@/lib/lead-profile";
 import type { OutboundLead } from "@/lib/types";
+import { canGenerateCallTrack, lvsAuditHref } from "@/components/LeadSalesActions";
 import { PreCallReportButton } from "@/components/PreCallReportButton";
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
@@ -129,9 +130,7 @@ function ProfileGrid({ profile }: { profile: LeadProfile }) {
 export function LeadGbpPanel({ lead }: { lead: OutboundLead }) {
   const profile = resolveLeadProfile(lead);
   const gaps = profile ? buildPreCallGaps(profile, { email: lead.email, phone: lead.phone }) : [];
-  const canRefresh = Boolean(
-    profile?.place_id || lead.external_id?.startsWith("google_place:"),
-  );
+  const showCallTrack = canGenerateCallTrack(lead);
 
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -143,24 +142,37 @@ export function LeadGbpPanel({ lead }: { lead: OutboundLead }) {
           <p className="mt-1 text-xs text-slate-500">
             {profile
               ? "Weak-presence snapshot: GBP fields plus site:/branded organic when CSE is configured."
-              : "No Maps snapshot yet — generate a report if this lead has a Place ID."}
+              : "No Maps snapshot yet — generate call track if this lead has a Place ID, or run LVS audit."}
           </p>
         </div>
-        {canRefresh ? <PreCallReportButton leadId={lead.id} /> : null}
+        <div className="flex flex-col gap-2 sm:items-end">
+          {showCallTrack ? <PreCallReportButton leadId={lead.id} /> : null}
+          <a
+            href={lvsAuditHref(lead)}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex min-h-[40px] items-center justify-center rounded-xl border border-indigo-300 bg-indigo-50 px-4 py-2 text-sm font-semibold text-indigo-900"
+          >
+            Run LVS audit
+          </a>
+        </div>
       </div>
 
       {profile ? (
         <>
           <ProfileGrid profile={profile} />
           <div className="mt-5 border-t border-slate-100 pt-4">
-            <h3 className="text-sm font-semibold text-slate-800">Likely gaps (talk track)</h3>
+            <h3 className="text-sm font-semibold text-slate-800">Call track</h3>
+            <p className="mt-1 text-xs text-slate-500">
+              Gap checklist for the dial — generate to refresh Places and rewrite this list.
+            </p>
             <GapList gaps={gaps} />
           </div>
         </>
       ) : (
         <p className="text-sm text-slate-600">
-          Notes may still have a free-text blob. Run Hunter again for new leads, or add a{" "}
-          <code className="text-xs">google_place:</code> external id to refresh.
+          Notes may still have a free-text blob. Run Hunter again for new leads, or use{" "}
+          <strong className="font-semibold text-slate-800">Run LVS audit</strong> for a full scorecard.
         </p>
       )}
     </section>
