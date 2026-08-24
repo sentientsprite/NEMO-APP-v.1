@@ -97,6 +97,15 @@ NEMO_AI_MODEL_CRITICAL=anthropic/claude-opus-4.8
 
 **Model routing:** Bulk stages (`researcher`, `spec_writer`, `builder`, `test_verifier`) use **Kimi K2.7**; critical stages (`story_writer`, `validator`) use **Opus 4.8**. Gateway tags `nemo-role:*` and `nemo-tier:*` attribute cost per stage. Set `NEMO_AI_ROUTING=0` to fall back to a single `NEMO_AI_MODEL`.
 
+**Live URL audits (optional):** When keys are set, `gatherUrlContext` appends PageSpeed (mobile+desktop) and Google Places/GBP snapshots into `sourceContext`. Missing keys skip quietly.
+
+```bash
+GOOGLE_PAGESPEED_API_KEY=...   # or reuse GOOGLE_MAPS_API_KEY if PageSpeed API is enabled
+GOOGLE_MAPS_API_KEY=...        # Places API (New) for GBP-style lookup
+```
+
+Check `/api/plan` → `agent.liveAudits` for `{ pagespeed, places }` booleans.
+
 ```bash
 # Legacy single-model mode:
 NEMO_AI_ROUTING=0
