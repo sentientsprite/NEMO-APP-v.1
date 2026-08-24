@@ -42,6 +42,29 @@ export function isCustomSearchConfigured(): boolean {
   return isOrganicSearchConfigured();
 }
 
+/**
+ * One cheap Serper/SerpAPI call to verify the key works.
+ * Call once per Hunter run — do not call per candidate.
+ */
+export async function probeOrganicSearch(): Promise<{
+  ok: boolean;
+  configured: boolean;
+  provider: "serper" | "serpapi" | null;
+  error?: string;
+}> {
+  if (!isOrganicSearchConfigured()) {
+    return { ok: false, configured: false, provider: null, error: "SERPER_API_KEY (or SERPAPI_API_KEY) not set" };
+  }
+  const provider: "serper" | "serpapi" = serperKey() ? "serper" : "serpapi";
+  try {
+    const r = await serpSearch("site:example.com", 1);
+    return { ok: true, configured: true, provider: r.provider };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return { ok: false, configured: true, provider, error: msg };
+  }
+}
+
 export function hostnameFromUrl(url: string | null | undefined): string | null {
   if (!url?.trim()) return null;
   try {

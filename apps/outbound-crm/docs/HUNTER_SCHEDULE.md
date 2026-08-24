@@ -92,9 +92,11 @@ gh secret set SERPER_API_KEY -R sentientsprite/NEMO-APP-v.1
 
 Queries: **`scripts/hunter-search-queries.json`**.
 
-Tunable env: `MAX_LEADS`, `STRONG_REVIEW_HARD_SKIP` (default **40**), `STRONG_REVIEW_HARD_SKIP_NO_CSE` (default **25**), `MIN_OPPORTUNITY` (default **50**), `MIN_PACKAGE_GAPS` (default **2**), `POOL_MULTIPLIER`.
+Tunable env: `MAX_LEADS`, `STRONG_REVIEW_HARD_SKIP` (default **45**), `STRONG_REVIEW_HARD_SKIP_NO_CSE` (default **32**), `MIN_OPPORTUNITY` (default **40**), `MIN_PACKAGE_GAPS` (default **2**), `LOW_C_VISIBILITY_MAX` (default **72**), `POOL_MULTIPLIER`.
 
-**Keep rule:** estimated grade **C / D / F** + **≥2** package gaps (GBP, photos, SMS review funnel, website, SEO/GEO/AEO, …). Hard-skip website+≥40 reviews always; without SERP, website+≥25 reviews.
+**Keep rule:** estimated grade **C / D / F**. Prefer ≥2 package gaps; **low-C** (visibility ≤72) or D/F may keep with **1 critical** package. Hard-skip website+≥45 reviews; without working SERP, website+≥32 reviews.
+
+**Serper health:** signed-in `GET /api/hunter/serp-health` — must return `{ ok: true }`. A 403 from Serper means the Production `SERPER_API_KEY` is invalid; create a new key at [serper.dev](https://serper.dev), set it on Vercel, redeploy.
 
 ### OpenClaw Hunter vs Places script
 
