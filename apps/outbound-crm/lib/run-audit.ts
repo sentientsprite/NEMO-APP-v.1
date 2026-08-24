@@ -81,6 +81,20 @@ export type LvsAuditResponse = {
   grade?: string;
   score?: number;
   reportUrl?: string;
+  headline?: string | null;
+  findingCount?: number;
+  criticalCount?: number;
+  warningCount?: number;
+  winCount?: number;
+  topFix?: { title: string; do_this: string } | null;
+  actionItems?: Array<{
+    id?: string;
+    priority?: string;
+    severity?: string;
+    title?: string;
+    why?: string;
+    outcome?: string;
+  }>;
   error?: string;
   detail?: string;
   hint?: string;

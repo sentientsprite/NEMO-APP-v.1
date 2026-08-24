@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
 import { extractZip } from "@/lib/run-audit";
@@ -17,6 +18,7 @@ export function RunAuditButton({
   align = "end",
   rerunLabel = "Run Audit",
 }: Props) {
+  const router = useRouter();
   const profile = resolveLeadProfile(lead);
   const suggestedZip = extractZip(lead.notes, profile?.address ?? null) ?? "";
   const [zip, setZip] = useState(suggestedZip);
@@ -55,6 +57,8 @@ export function RunAuditButton({
         if (!opened) {
           setError("PDF ready — popup blocked; use Open PDF below.");
         }
+        // Refresh so call track (written from this audit) appears in step 2.
+        router.refresh();
       } catch (e) {
         setError(e instanceof Error ? e.message : "Audit request failed");
       }
@@ -88,7 +92,7 @@ export function RunAuditButton({
       {result ? (
         <p className="max-w-xs text-xs text-slate-600">
           {result.grade}
-          {result.score != null ? ` / ${result.score}` : ""} —{" "}
+          {result.score != null ? ` / ${result.score}` : ""} — call track updated —{" "}
           <a
             href={result.reportUrl}
             target="_blank"

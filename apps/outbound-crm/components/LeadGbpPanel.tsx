@@ -5,8 +5,6 @@ import {
   type PreCallGap,
 } from "@/lib/lead-profile";
 import type { OutboundLead } from "@/lib/types";
-import { PreCallReportButton } from "@/components/PreCallReportButton";
-import { canGenerateCallTrack } from "@/lib/lead-ux";
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -132,27 +130,23 @@ export function LeadGbpPanel({
   mode = "full",
 }: {
   lead: OutboundLead;
-  /** reference = Maps fields only (call track lives in LeadWorkflow steps). */
+  /** reference = Maps fields only (call track comes from Run Audit). */
   mode?: "full" | "reference";
 }) {
   const profile = resolveLeadProfile(lead);
   const gaps = profile ? buildPreCallGaps(profile, { email: lead.email, phone: lead.phone }) : [];
-  const showCallTrack = mode === "full" && canGenerateCallTrack(lead);
 
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-      <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
-            {mode === "reference" ? "Reference — Google / Maps + organic" : "Google / Maps + organic"}
-          </h2>
-          <p className="mt-1 text-xs text-slate-500">
-            {profile
-              ? "Weak-presence snapshot: GBP fields plus site:/branded organic when CSE is configured."
-              : "No Maps snapshot yet."}
-          </p>
-        </div>
-        {showCallTrack ? <PreCallReportButton leadId={lead.id} /> : null}
+      <div className="mb-3">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
+          {mode === "reference" ? "Reference — Google / Maps + organic" : "Google / Maps + organic"}
+        </h2>
+        <p className="mt-1 text-xs text-slate-500">
+          {profile
+            ? "Weak-presence snapshot: GBP fields plus site:/branded organic when CSE is configured."
+            : "No Maps snapshot yet."}
+        </p>
       </div>
 
       {profile ? (
@@ -160,18 +154,14 @@ export function LeadGbpPanel({
           <ProfileGrid profile={profile} />
           {mode === "full" ? (
             <div className="mt-5 border-t border-slate-100 pt-4">
-              <h3 className="text-sm font-semibold text-slate-800">Call track</h3>
-              <p className="mt-1 text-xs text-slate-500">
-                Gap checklist for the dial — generate to refresh Places and rewrite this list.
-              </p>
+              <h3 className="text-sm font-semibold text-slate-800">Maps-only gaps (legacy)</h3>
               <GapList gaps={gaps} />
             </div>
           ) : null}
         </>
       ) : (
         <p className="text-sm text-slate-600">
-          Notes may still have a free-text blob. Run Hunter again for new leads, or use Run Audit for a full
-          scorecard.
+          Notes may still have a free-text blob. Run Audit on this lead for a full scorecard + call track.
         </p>
       )}
     </section>
