@@ -90,7 +90,9 @@ gh secret set HUNTER_WEBHOOK_SECRET -R sentientsprite/NEMO-APP-v.1
 
 Queries: **`scripts/hunter-search-queries.json`**.
 
-Tunable env: `MAX_LEADS`, `STRONG_REVIEW_HARD_SKIP` (default 150), `MIN_OPPORTUNITY` (default 35), `POOL_MULTIPLIER`, `GOOGLE_CSE_CX`.
+Tunable env: `MAX_LEADS`, `STRONG_REVIEW_HARD_SKIP` (default 150 with CSE), `STRONG_REVIEW_HARD_SKIP_NO_CSE` (default 60 when organic skipped), `MIN_OPPORTUNITY` (default 35), `POOL_MULTIPLIER`, `GOOGLE_CSE_CX`.
+
+**Maps-only mode (CSE blocked or unset):** keepers require a **critical Maps gap** — no website, **&lt;15 reviews**, or missing hours. Mid-tier listings (website + 15–60+ reviews) are dropped until organic scoring works.
 
 ### OpenClaw Hunter vs Places script
 
