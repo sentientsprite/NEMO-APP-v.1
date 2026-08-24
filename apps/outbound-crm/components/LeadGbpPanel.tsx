@@ -5,7 +5,7 @@ import {
   type PreCallGap,
 } from "@/lib/lead-profile";
 import type { OutboundLead } from "@/lib/types";
-import { canGenerateCallTrack, lvsAuditHref } from "@/components/LeadSalesActions";
+import { canGenerateCallTrack } from "@/components/LeadSalesActions";
 import { PreCallReportButton } from "@/components/PreCallReportButton";
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
@@ -142,19 +142,11 @@ export function LeadGbpPanel({ lead }: { lead: OutboundLead }) {
           <p className="mt-1 text-xs text-slate-500">
             {profile
               ? "Weak-presence snapshot: GBP fields plus site:/branded organic when CSE is configured."
-              : "No Maps snapshot yet — generate call track if this lead has a Place ID, or run LVS audit."}
+              : "No Maps snapshot yet — generate call track if this lead has a Place ID, or run Audit."}
           </p>
         </div>
         <div className="flex flex-col gap-2 sm:items-end">
           {showCallTrack ? <PreCallReportButton leadId={lead.id} /> : null}
-          <a
-            href={lvsAuditHref(lead)}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex min-h-[40px] items-center justify-center rounded-xl border border-indigo-300 bg-indigo-50 px-4 py-2 text-sm font-semibold text-indigo-900"
-          >
-            Run LVS audit
-          </a>
         </div>
       </div>
 
@@ -172,7 +164,7 @@ export function LeadGbpPanel({ lead }: { lead: OutboundLead }) {
       ) : (
         <p className="text-sm text-slate-600">
           Notes may still have a free-text blob. Run Hunter again for new leads, or use{" "}
-          <strong className="font-semibold text-slate-800">Run LVS audit</strong> for a full scorecard.
+          <strong className="font-semibold text-slate-800">Run Audit</strong> for a full scorecard.
         </p>
       )}
     </section>
