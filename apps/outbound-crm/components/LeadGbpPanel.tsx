@@ -97,8 +97,14 @@ function ProfileGrid({ profile }: { profile: LeadProfile }) {
           {new Date(profile.fetched_at).toLocaleString()}
         </Field>
       ) : null}
+      {profile.estimated_grade ? (
+        <Field label="Hunter grade">{profile.estimated_grade} (keep C/D/F)</Field>
+      ) : null}
       {profile.opportunity_score != null ? (
         <Field label="Opportunity score">{profile.opportunity_score}/100 (higher = weaker presence)</Field>
+      ) : null}
+      {(profile.service_packages ?? []).length ? (
+        <Field label="Sellable packages">{(profile.service_packages ?? []).join(", ")}</Field>
       ) : null}
       <Field label="Organic site: index">
         {profile.organic?.skipped

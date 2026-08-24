@@ -17,8 +17,11 @@ import { fetchPlaceDetails, placeDetailsToProfile, placesApiKey } from "@/lib/pl
 import {
   combineOpportunityScore,
   formatOrganicNotes,
+  formatPackageNotes,
   shouldHardSkipStrongPresence,
   shouldKeepWeakProspect,
+  type ProspectGrade,
+  type ServicePackageGap,
 } from "@/lib/weak-presence";
 
 export type HunterSyncResult =
@@ -141,6 +144,8 @@ async function runPlacesSync(maxLeads: number): Promise<HunterSyncResult> {
     opportunity: number;
     reasons: string[];
     organic: OrganicFootprint;
+    grade: ProspectGrade;
+    packages: ServicePackageGap[];
   };
 
   const ranked: Ranked[] = [];
@@ -191,7 +196,12 @@ async function runPlacesSync(maxLeads: number): Promise<HunterSyncResult> {
     const breakdown = combineOpportunityScore(profile, organic);
     if (!shouldKeepWeakProspect(breakdown, organic)) continue;
 
-    profile = { ...profile, opportunity_score: breakdown.total };
+    profile = {
+      ...profile,
+      opportunity_score: breakdown.total,
+      estimated_grade: breakdown.estimatedGrade,
+      service_packages: breakdown.packages.map((p) => p.id),
+    };
 
     ranked.push({
       name,
@@ -202,6 +212,8 @@ async function runPlacesSync(maxLeads: number): Promise<HunterSyncResult> {
       opportunity: breakdown.total,
       reasons: breakdown.reasons,
       organic,
+      grade: breakdown.estimatedGrade,
+      packages: breakdown.packages,
     });
 
     // Stop early once we have enough keepers — avoid burning the request budget.
@@ -226,14 +238,16 @@ async function runPlacesSync(maxLeads: number): Promise<HunterSyncResult> {
       source: "hunter_weak_presence",
       external_id: `google_place:${w.placeId}`,
       notes: [
+        `Grade: ${w.grade} (C-and-below ICP)`,
         `Opportunity: ${w.opportunity}/100 (${w.reasons.slice(0, 6).join(", ")})`,
+        formatPackageNotes(w.packages),
         `Reviews: ${reviews} · Rating: ${rating ?? "n/a"}`,
         website ? `Website: ${website}` : "Website: no",
         formatOrganicNotes(w.organic),
         mapsUrl ? `Maps: ${mapsUrl}` : null,
         `Maps query: ${w.query}`,
         w.profile.address ? `Address: ${w.profile.address}` : null,
-        "Pipeline: outbound-crm weak-presence Leadfinder",
+        "Pipeline: outbound-crm C-and-below package Leadfinder",
       ]
         .filter(Boolean)
         .join(" · "),
@@ -249,8 +263,8 @@ async function runPlacesSync(maxLeads: number): Promise<HunterSyncResult> {
     return {
       ok: false,
       error: serpOn
-        ? "Weak-presence hunt found 0 keepers (pool may be Map Pack winners only, or phone/billing). Widen queries or check Places/SERP."
-        : "Weak-presence hunt found 0 keepers. Set SERPER_API_KEY (or SERPAPI_API_KEY) for site:/branded organic, or widen trade/city queries.",
+        ? "C-and-below hunt found 0 keepers (need ≥2 package gaps + grade C/D/F). Widen queries or check Places/SERP."
+        : "C-and-below hunt found 0 keepers. Set SERPER_API_KEY for organic packages, or widen trade/city queries.",
     };
   }
 
@@ -259,10 +273,10 @@ async function runPlacesSync(maxLeads: number): Promise<HunterSyncResult> {
     mode: "places",
     posted,
     message: serpOn && !organicSkipped
-      ? `Weak-presence Leadfinder posted ${posted} lead(s) (Maps + SERP organic). Refresh the queue.`
+      ? `Posted ${posted} C-and-below lead(s) (Maps + SERP; multi-package gaps). Refresh the queue.`
       : serpOn && organicSkipped
-        ? `Weak-presence posted ${posted} (Maps keepers; some SERP skipped: ${organicBlockedReason || "check SERPER_API_KEY"}). Refresh the queue.`
-        : `Weak-presence posted ${posted} (Maps-only; set SERPER_API_KEY for organic). Refresh the queue.`,
+        ? `Posted ${posted} C-and-below (Maps packages; some SERP skipped: ${organicBlockedReason || "check SERPER_API_KEY"}). Refresh the queue.`
+        : `Posted ${posted} C-and-below (Maps packages; set SERPER_API_KEY for SEO/organic). Refresh the queue.`,
   };
 }
 

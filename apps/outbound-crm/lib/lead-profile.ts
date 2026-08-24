@@ -29,6 +29,10 @@ export interface LeadProfile {
   fetched_at?: string;
   organic?: LeadOrganicProfile | null;
   opportunity_score?: number | null;
+  /** Hunter estimate — LVS-style A–F from Maps/organic surface (keep C/D/F). */
+  estimated_grade?: "A" | "B" | "C" | "D" | "F" | null;
+  /** Sellable Nemo package ids inferred at hunt time. */
+  service_packages?: string[] | null;
 }
 
 export interface PreCallGap {
@@ -109,7 +113,7 @@ export function buildPreCallGaps(profile: LeadProfile, lead: { email?: string | 
       severity: "critical",
       title: "No usable website on the Maps listing",
       talk_track:
-        "Ask what URL they want customers to hit. Offer to check whether GBP points at a service page vs a dead homepage.",
+        "Package: website build / plugin + UX fixes. Ask what URL customers should hit; GBP often points at a dead homepage.",
     });
   }
 
@@ -118,7 +122,8 @@ export function buildPreCallGaps(profile: LeadProfile, lead: { email?: string | 
       id: "no_hours",
       severity: "critical",
       title: "Hours missing on Google",
-      talk_track: "Emergency / same-day queries often hide listings with incomplete hours — easy first win.",
+      talk_track:
+        "Package: GBP management — emergency / same-day queries hide incomplete listings. Easy first win.",
     });
   }
 
@@ -127,23 +132,26 @@ export function buildPreCallGaps(profile: LeadProfile, lead: { email?: string | 
       id: "thin_photos",
       severity: "warning",
       title: `Thin photo set (${profile.photo_count ?? 0} on file)`,
-      talk_track: "Suggest 2–3 real jobsite photos this week — Vision AI / Maps trust fresh work photos.",
+      talk_track:
+        "Package: photo management — 2–3 real jobsite photos this week; Maps trusts fresh work photos.",
     });
   }
 
-  if (reviews < 15) {
+  if (reviews < 12) {
     gaps.push({
       id: "low_reviews",
       severity: "critical",
       title: `Low review count (${reviews})`,
-      talk_track: "Pitch review velocity / Echo-style post-job asks before ads. Competitors with velocity win the pack.",
+      talk_track:
+        "Package: SMS review funnel — post-job text prompt + tracking before ads. Velocity wins the pack.",
     });
-  } else if (reviews < 40) {
+  } else if (reviews < 25) {
     gaps.push({
       id: "mid_reviews",
       severity: "warning",
       title: `Review count is middling (${reviews})`,
-      talk_track: "They are not dead, but a steady reply + ask cadence still moves Map Pack.",
+      talk_track:
+        "Package: SMS review funnel + reply cadence — still closable; not a Map Pack winner yet.",
     });
   }
 
@@ -191,7 +199,7 @@ export function buildPreCallGaps(profile: LeadProfile, lead: { email?: string | 
         severity: siteN === 0 ? "critical" : "warning",
         title: `Thin organic index (site: ≈ ${siteN})`,
         talk_track:
-          "Their domain barely shows in Google index — pitch service pages + GBP website fix before ads.",
+          "Package: SEO / SEM / GEO / AEO — domain barely indexed; service pages + GBP website fix before ads.",
       });
     }
     if (organic.branded_hit === false) {
@@ -200,7 +208,7 @@ export function buildPreCallGaps(profile: LeadProfile, lead: { email?: string | 
         severity: "critical",
         title: "Weak branded organic (name + city miss)",
         talk_track:
-          "Customers searching the business name may not find them first — NAP consistency + citations + on-page brand.",
+          "Package: SEO + citations / social presence — name+city miss; NAP + on-page brand before paid.",
       });
     }
   }
