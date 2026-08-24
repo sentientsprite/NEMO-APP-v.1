@@ -41,9 +41,9 @@ export function RunHunterWorkflowButton() {
         <div>
           <p className="text-sm font-semibold text-indigo-950">Hunter lead sync</p>
           <p className="mt-0.5 text-xs text-indigo-900/80">
-            Targets estimated grade <span className="font-medium">C / D / F</span> (incl. low-C with
-            one critical gap). Packages: GBP, photos, SMS review funnel, website, SEO/GEO/AEO.
-            Needs Places; organic needs a working{" "}
+            SERP-first ICP: keep only when <span className="font-medium">category / branded / site</span>{" "}
+            checks prove they are not producing results — then map 1:1 packages (GBP, photos, SMS
+            reviews, website, SEO/SEM/GEO/AEO). Requires working{" "}
             <span className="font-medium">SERPER_API_KEY</span>.
           </p>
         </div>
