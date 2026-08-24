@@ -117,8 +117,9 @@ export async function dispatchHunterLeadWorkflowAction(): Promise<HunterDispatch
   }
 
   // Default: run Leadfinder (Places) or fixtures inside this deployment.
+  // Prefer POST /api/hunter/run (maxDuration 60) from the UI — this path can still timeout.
   try {
-    const result = await runHunterSyncInline(8);
+    const result = await runHunterSyncInline(5);
     if (!result.ok) return { ok: false, error: result.error };
     return { ok: true, message: result.message };
   } catch (e) {

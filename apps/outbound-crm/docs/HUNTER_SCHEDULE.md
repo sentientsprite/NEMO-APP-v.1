@@ -43,13 +43,15 @@ If **`nemo-app-v-1`** was mistakenly wired to **`apps/outbound-crm`**, switch th
 
 ### Inline button (`Run Hunter now` on `/queue`)
 
-Uses [`lib/hunter-sync.ts`](../lib/hunter-sync.ts):
+Calls **`POST /api/hunter/run`** (`maxDuration` 60s) → [`lib/hunter-sync.ts`](../lib/hunter-sync.ts):
 
-1. Places Text Search (trade + city queries)
+1. Places Text Search (3 trade+city queries, capped pool)
 2. Place Details
-3. Optional SERP: `site:{domain}` + `"Business Name" City` via **Serper** (or SerpAPI)
-4. Opportunity score (higher = weaker) → hard-skip strong winners (e.g. ≥150 reviews + website)
-5. POST keepers with `source=hunter_weak_presence` and `profile.organic`
+3. **Maps prefilter** (critical gaps only) — skip SERP for Map Pack–ish listings
+4. Optional SERP on keepers: `site:{domain}` + `"Business Name" City` via **Serper** (or SerpAPI)
+5. Opportunity score → hard-skip strong winners → POST keepers (`source=hunter_weak_presence`)
+
+If the button still times out, use the GitHub daily workflow (no Vercel request limit).
 
 **Vercel env (outbound-crm):**
 

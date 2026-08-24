@@ -2,8 +2,6 @@
 
 import { useState, useTransition } from "react";
 
-import { dispatchHunterLeadWorkflowAction } from "@/app/actions/hunter";
-
 export function RunHunterWorkflowButton() {
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -13,11 +11,26 @@ export function RunHunterWorkflowButton() {
     setMessage(null);
     setError(null);
     startTransition(async () => {
-      const result = await dispatchHunterLeadWorkflowAction();
-      if (result.ok) {
-        setMessage(result.message);
-      } else {
-        setError(result.error);
+      try {
+        const res = await fetch("/api/hunter/run", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ maxLeads: 5 }),
+          signal: AbortSignal.timeout(55_000),
+        });
+        const json = (await res.json()) as { ok?: boolean; message?: string; error?: string };
+        if (!res.ok || !json.ok) {
+          setError(json.error || `Hunter failed (${res.status})`);
+          return;
+        }
+        setMessage(json.message || "Hunter finished. Refresh the queue.");
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        setError(
+          /aborted|timeout/i.test(msg)
+            ? "Hunter timed out — try again, or run the GitHub daily workflow for a longer job."
+            : msg,
+        );
       }
     });
   }
@@ -40,7 +53,7 @@ export function RunHunterWorkflowButton() {
           disabled={pending}
           className="shrink-0 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
         >
-          {pending ? "Starting…" : "Run Hunter now"}
+          {pending ? "Running… (up to ~50s)" : "Run Hunter now"}
         </button>
       </div>
       {message ? (
