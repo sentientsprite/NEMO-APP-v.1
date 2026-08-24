@@ -2,9 +2,9 @@
 /**
  * Weak-presence Hunter → Outbound CRM (GitHub Actions).
  *
- * ICP: businesses with weak Maps and/or weak organic presence (not Map Pack winners).
- * Pipeline: Places Text Search → Details → optional Custom Search (site: + branded)
- * → opportunity score (higher = weaker) → POST top N.
+ * ICP: estimated grade C/D/F with ≥2 sellable package gaps (not B / Map Pack).
+ * Pipeline: Places Text Search → Details → optional SERP (site: + branded)
+ * → grade + packages → POST top N.
  *
  * Env:
  *   GOOGLE_PLACES_API_KEY      — Places API
@@ -14,9 +14,10 @@
  *   SERPAPI_API_KEY            — optional fallback (serpapi.com)
  *   MAX_LEADS                  — optional, default 10
  *   MAX_USER_RATINGS_TOTAL     — soft prefer under this (default 80); hard-skip ≥ STRONG
- *   STRONG_REVIEW_HARD_SKIP    — default 150 (with website → skip)
- *   STRONG_REVIEW_HARD_SKIP_NO_CSE — default 60 when organic skipped
- *   MIN_OPPORTUNITY            — default 35
+ *   STRONG_REVIEW_HARD_SKIP    — default 40 (website + reviews → skip)
+ *   STRONG_REVIEW_HARD_SKIP_NO_CSE — default 25 when organic skipped
+ *   MIN_OPPORTUNITY            — default 50
+ *   MIN_PACKAGE_GAPS           — default 2
  *   POOL_MULTIPLIER            — default 6
  *   HUNTER_SEARCH_QUERIES_PATH — optional JSON array of query strings
  */
@@ -33,19 +34,20 @@ const SERPER_KEY = process.env.SERPER_API_KEY?.trim() || "";
 const SERPAPI_KEY = process.env.SERPAPI_API_KEY?.trim() || "";
 const MAX_LEADS = Math.min(50, Math.max(1, parseInt(process.env.MAX_LEADS || "10", 10) || 10));
 const STRONG_REVIEW_HARD_SKIP = Math.max(
-  50,
-  parseInt(process.env.STRONG_REVIEW_HARD_SKIP || "150", 10) || 150,
+  20,
+  parseInt(process.env.STRONG_REVIEW_HARD_SKIP || "40", 10) || 40,
 );
-/** When SERP is skipped, hard-skip website + reviews at/above this (Maps-only safety). */
+/** When SERP is skipped, hard-skip website + reviews at/above this. */
 const STRONG_REVIEW_HARD_SKIP_NO_CSE = Math.max(
-  30,
-  parseInt(process.env.STRONG_REVIEW_HARD_SKIP_NO_CSE || "60", 10) || 60,
+  15,
+  parseInt(process.env.STRONG_REVIEW_HARD_SKIP_NO_CSE || "25", 10) || 25,
 );
-const MIN_OPPORTUNITY = Math.max(0, parseInt(process.env.MIN_OPPORTUNITY || "35", 10) || 35);
+const MIN_OPPORTUNITY = Math.max(0, parseInt(process.env.MIN_OPPORTUNITY || "50", 10) || 50);
+const MIN_PACKAGE_GAPS = Math.max(1, parseInt(process.env.MIN_PACKAGE_GAPS || "2", 10) || 2);
 const POOL_MULTIPLIER = Math.min(12, Math.max(2, parseInt(process.env.POOL_MULTIPLIER || "6", 10) || 6));
 const THIN_SITE_MAX = 5;
-const WEAK_REVIEW_CRITICAL = 15;
-const WEAK_REVIEW_SOFT = 40;
+const WEAK_REVIEW_CRITICAL = 12;
+const WEAK_REVIEW_SOFT = 25;
 
 const DETAIL_FIELDS = [
   "name",
@@ -178,6 +180,71 @@ async function fetchOrganic(name, website, city) {
   return out;
 }
 
+function gradeFromVisibility(score) {
+  if (score >= 90) return "A";
+  if (score >= 80) return "B";
+  if (score >= 65) return "C";
+  if (score >= 50) return "D";
+  return "F";
+}
+
+function listPackages(det, organic) {
+  const packages = [];
+  const reviews = det.user_ratings_total ?? 0;
+  const website = Boolean(det.website?.trim());
+  const hasHours = det.opening_hours != null;
+  const photoCount = Array.isArray(det.photos) ? det.photos.length : 0;
+
+  if (!hasHours) packages.push("gbp_management");
+  if (photoCount < 3) packages.push("photo_management");
+  if (reviews < WEAK_REVIEW_SOFT) packages.push("review_sms_funnel");
+  if (!website) packages.push("website_build_or_fix");
+
+  if (organic && !organic.skipped) {
+    const siteN = organic.site_total_results;
+    const thin = website && typeof siteN === "number" && siteN <= THIN_SITE_MAX;
+    if (thin || organic.branded_hit === false) packages.push("local_seo_sem_geo_aeo");
+    if (organic.branded_hit === false && reviews < WEAK_REVIEW_SOFT) packages.push("social_presence");
+  }
+
+  if (website && reviews < WEAK_REVIEW_CRITICAL && (!hasHours || photoCount < 3)) {
+    packages.push("paid_ads_after_foundation");
+  }
+
+  return [...new Set(packages)];
+}
+
+function scoreVisibility(det, organic) {
+  let score = 88;
+  const reviews = det.user_ratings_total ?? 0;
+  const website = Boolean(det.website?.trim());
+  const hasHours = det.opening_hours != null;
+  const photoCount = Array.isArray(det.photos) ? det.photos.length : 0;
+
+  if (!website) score -= 28;
+  if (reviews < 5) score -= 30;
+  else if (reviews < WEAK_REVIEW_CRITICAL) score -= 22;
+  else if (reviews < WEAK_REVIEW_SOFT) score -= 12;
+  else if (reviews < STRONG_REVIEW_HARD_SKIP) score -= 4;
+  else score += 6;
+  if (!hasHours) score -= 16;
+  if (photoCount < 3) score -= 10;
+  if (typeof det.rating === "number" && det.rating > 0 && det.rating < 4) score -= 10;
+
+  if (organic && !organic.skipped) {
+    const siteN = organic.site_total_results;
+    if (typeof siteN === "number") {
+      if (siteN <= 0) score -= 18;
+      else if (siteN <= THIN_SITE_MAX) score -= 12;
+      else if (siteN > 50) score += 6;
+    }
+    if (organic.branded_hit === false) score -= 14;
+    else if (organic.branded_hit === true && (organic.branded_rank ?? 1) <= 3) score += 8;
+  }
+
+  return Math.max(0, Math.min(100, score));
+}
+
 function scoreOpportunity(det, organic) {
   const reasons = [];
   let maps = 0;
@@ -191,23 +258,23 @@ function scoreOpportunity(det, organic) {
     reasons.push("no_website");
   }
   if (reviews < WEAK_REVIEW_CRITICAL) {
-    maps += 30;
+    maps += 32;
     reasons.push(`reviews_${reviews}`);
   } else if (reviews < WEAK_REVIEW_SOFT) {
     maps += 18;
     reasons.push(`reviews_mid_${reviews}`);
-  } else if (reviews < 80) {
-    maps += 6;
+  } else if (reviews < STRONG_REVIEW_HARD_SKIP) {
+    maps += 4;
   } else {
-    maps -= 15;
+    maps -= 20;
     reasons.push(`reviews_strong_${reviews}`);
   }
   if (!hasHours) {
-    maps += 15;
+    maps += 18;
     reasons.push("no_hours");
   }
   if (photoCount < 3) {
-    maps += 10;
+    maps += 12;
     reasons.push(`thin_photos_${photoCount}`);
   }
 
@@ -242,27 +309,50 @@ function scoreOpportunity(det, organic) {
     }
   }
 
-  const critical = !website || reviews < WEAK_REVIEW_CRITICAL || !hasHours;
+  const critical =
+    (!website && reviews < WEAK_REVIEW_SOFT) ||
+    (reviews < WEAK_REVIEW_CRITICAL && (!hasHours || !website)) ||
+    (!hasHours && photoCount < 3 && reviews < WEAK_REVIEW_SOFT);
   const total = Math.max(0, Math.min(100, Math.round(maps * 0.65 + org * 0.35)));
-  return { total, reasons, critical, maps, org };
+  const visibility = scoreVisibility(det, organic);
+  const grade = gradeFromVisibility(visibility);
+  const packages = listPackages(det, organic);
+  return { total, reasons, critical, maps, org, grade, packages, visibility };
 }
 
 function hardSkip(det, organic) {
   const reviews = det.user_ratings_total ?? 0;
   const website = Boolean(det.website?.trim());
   const cseUnavailable = !organic || organic.skipped;
-  const ceiling = cseUnavailable ? STRONG_REVIEW_HARD_SKIP_NO_CSE : STRONG_REVIEW_HARD_SKIP;
-  if (reviews < ceiling || !website) return false;
-  if (cseUnavailable) return true;
-  if (organic.branded_hit === true) return true;
-  if (typeof organic.site_total_results === "number" && organic.site_total_results > 50) return true;
+
+  if (website && reviews >= STRONG_REVIEW_HARD_SKIP) return true;
+  if (cseUnavailable && website && reviews >= STRONG_REVIEW_HARD_SKIP_NO_CSE) return true;
+  if (
+    !cseUnavailable &&
+    website &&
+    reviews >= STRONG_REVIEW_HARD_SKIP_NO_CSE &&
+    organic.branded_hit === true &&
+    (organic.branded_rank ?? 1) <= 3
+  ) {
+    return true;
+  }
+  if (
+    !cseUnavailable &&
+    website &&
+    reviews >= STRONG_REVIEW_HARD_SKIP_NO_CSE &&
+    typeof organic.site_total_results === "number" &&
+    organic.site_total_results > 40
+  ) {
+    return true;
+  }
   return false;
 }
 
-function shouldKeep(breakdown, organic) {
-  if (breakdown.critical) return true;
-  if (!organic || organic.skipped) return false;
-  return breakdown.total >= MIN_OPPORTUNITY;
+function shouldKeep(breakdown) {
+  if (!["C", "D", "F"].includes(breakdown.grade)) return false;
+  if ((breakdown.packages?.length || 0) < MIN_PACKAGE_GAPS) return false;
+  if (breakdown.total < MIN_OPPORTUNITY && !breakdown.critical) return false;
+  return true;
 }
 
 async function textSearch(query) {
@@ -357,23 +447,32 @@ for (const { hit, query } of staged) {
 
   if (hardSkip(det, organic)) continue;
 
-  const { total, reasons, critical } = scoreOpportunity(det, organic);
-  if (!shouldKeep({ total, critical }, organic)) continue;
+  const breakdown = scoreOpportunity(det, organic);
+  if (!shouldKeep(breakdown)) continue;
 
-  enriched.push({ hit, query, det, organic, score: total, reasons });
+  enriched.push({
+    hit,
+    query,
+    det,
+    organic,
+    score: breakdown.total,
+    reasons: breakdown.reasons,
+    grade: breakdown.grade,
+    packages: breakdown.packages,
+  });
 }
 
 enriched.sort((a, b) => b.score - a.score);
 const winners = enriched.slice(0, MAX_LEADS);
 
 console.log(
-  `Weak-presence: ${enriched.length} keepers from ${staged.length} staged; posting top ${winners.length} (SERP=${Boolean(SERPER_KEY || SERPAPI_KEY)}).`,
+  `C-and-below: ${enriched.length} keepers from ${staged.length} staged; posting top ${winners.length} (SERP=${Boolean(SERPER_KEY || SERPAPI_KEY)}).`,
 );
 
 const posted = [];
 
 for (let i = 0; i < winners.length; i++) {
-  const { hit, query, det, organic, score, reasons } = winners[i];
+  const { hit, query, det, organic, score, reasons, grade, packages } = winners[i];
   const pid = det.place_id || hit.place_id;
   const name = (det.name || hit.name || "Unknown").trim();
   const phone = det.formatted_phone_number.trim();
@@ -407,16 +506,20 @@ for (let i = 0; i < winners.length; i++) {
     fetched_at: new Date().toISOString(),
     organic,
     opportunity_score: score,
+    estimated_grade: grade,
+    service_packages: packages,
   };
 
   const notes = [
+    `Grade: ${grade} (C-and-below ICP)`,
     `Opportunity: ${score}/100 (${reasons.slice(0, 6).join(", ")})`,
+    `Packages: ${(packages || []).join(", ") || "none"}`,
     `Reviews: ${reviews} · Rating: ${det.rating ?? "n/a"}`,
     website ? `Website: ${website}` : "Website: no",
     siteNote,
     `Maps query: ${query}`,
     det.formatted_address ? `Address: ${det.formatted_address}` : null,
-    "Pipeline: github-actions hunter-daily weak-presence",
+    "Pipeline: github-actions hunter-daily C-and-below",
   ]
     .filter(Boolean)
     .join(" · ");
@@ -446,10 +549,10 @@ for (let i = 0; i < winners.length; i++) {
   await new Promise((r) => setTimeout(r, 250));
 }
 
-console.log(`\nFinished: posted ${posted.length} weak-presence leads (cap ${MAX_LEADS}).`);
+console.log(`\nFinished: posted ${posted.length} C-and-below leads (cap ${MAX_LEADS}).`);
 if (posted.length === 0) {
   console.error(
-    "No leads posted — pool may be strong winners only, or check Places/SERP + webhook secrets.",
+    "No leads posted — need grade C/D/F + ≥2 packages, or check Places/SERP + webhook secrets.",
   );
   process.exit(1);
 }

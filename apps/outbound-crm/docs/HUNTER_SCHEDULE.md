@@ -39,17 +39,18 @@ If **`nemo-app-v-1`** was mistakenly wired to **`apps/outbound-crm`**, switch th
 
 ---
 
-## Weak-presence Leadfinder (Places + SERP organic)
+## Weak-presence Leadfinder (C-and-below package ICP)
 
 ### Inline button (`Run Hunter now` on `/queue`)
 
-Calls **`POST /api/hunter/run`** (`maxDuration` 60s) → [`lib/hunter-sync.ts`](../lib/hunter-sync.ts):
+Calls **`POST /api/hunter/run`** (`maxDuration` 60s) → [`lib/hunter-sync.ts`](../lib/hunter-sync.ts) + [`lib/weak-presence.ts`](../lib/weak-presence.ts):
 
 1. Places Text Search (3 trade+city queries, capped pool)
 2. Place Details
-3. **Maps prefilter** (critical gaps only) — skip SERP for Map Pack–ish listings
-4. Optional SERP on keepers: `site:{domain}` + `"Business Name" City` via **Serper** (or SerpAPI)
-5. Opportunity score → hard-skip strong winners → POST keepers (`source=hunter_weak_presence`)
+3. **Maps prefilter** — hard-skip website+≥25 reviews (no SERP) / website+≥40 always
+4. Optional SERP on survivors: `site:` + branded
+5. Keep only **estimated grade C / D / F** with **≥2 sellable packages** (GBP, photos, SMS review funnel, website, SEO/GEO/AEO, …)
+6. POST keepers (`source=hunter_weak_presence`) with `Grade:` + `Packages:` in notes
 
 If the button still times out, use the GitHub daily workflow (no Vercel request limit).
 
@@ -91,9 +92,9 @@ gh secret set SERPER_API_KEY -R sentientsprite/NEMO-APP-v.1
 
 Queries: **`scripts/hunter-search-queries.json`**.
 
-Tunable env: `MAX_LEADS`, `STRONG_REVIEW_HARD_SKIP` (default 150 with SERP), `STRONG_REVIEW_HARD_SKIP_NO_CSE` (default 60 when organic skipped), `MIN_OPPORTUNITY` (default 35), `POOL_MULTIPLIER`.
+Tunable env: `MAX_LEADS`, `STRONG_REVIEW_HARD_SKIP` (default **40**), `STRONG_REVIEW_HARD_SKIP_NO_CSE` (default **25**), `MIN_OPPORTUNITY` (default **50**), `MIN_PACKAGE_GAPS` (default **2**), `POOL_MULTIPLIER`.
 
-**Maps-only mode (SERP unset or failing):** keepers require a **critical Maps gap** — no website, **&lt;15 reviews**, or missing hours. Mid-tier listings (website + 15–60+ reviews) are dropped until organic scoring works.
+**Keep rule:** estimated grade **C / D / F** + **≥2** package gaps (GBP, photos, SMS review funnel, website, SEO/GEO/AEO, …). Hard-skip website+≥40 reviews always; without SERP, website+≥25 reviews.
 
 ### OpenClaw Hunter vs Places script
 

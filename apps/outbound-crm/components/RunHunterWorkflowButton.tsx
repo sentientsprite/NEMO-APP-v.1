@@ -41,10 +41,10 @@ export function RunHunterWorkflowButton() {
         <div>
           <p className="text-sm font-semibold text-indigo-950">Hunter lead sync</p>
           <p className="mt-0.5 text-xs text-indigo-900/80">
-            Finds <span className="font-medium">weak</span> local presence (low reviews, no website,
-            missing hours — not Map Pack winners). Needs Places key; organic filters need{" "}
-            <span className="font-medium">SERPER_API_KEY</span>. Keepers land as{" "}
-            <span className="font-medium">new</span>.
+            Targets estimated grade <span className="font-medium">C / D / F</span> with{" "}
+            <span className="font-medium">≥2 sellable gaps</span> (GBP, photos, SMS review funnel,
+            website, SEO/GEO/AEO — not B / C+ Map Pack shops). Needs Places; organic packages need{" "}
+            <span className="font-medium">SERPER_API_KEY</span>.
           </p>
         </div>
         <button
