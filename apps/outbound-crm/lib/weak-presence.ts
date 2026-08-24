@@ -9,11 +9,16 @@ import type { LeadProfile } from "@/lib/lead-profile";
 export const WEAK_REVIEW_SOFT_MAX = 40;
 /** Critical Maps gap when reviews below this. */
 export const WEAK_REVIEW_CRITICAL = 15;
-/** Map Pack winners at or above this + website + branded hit → hard skip. */
+/** Map Pack winners at or above this + website (+ branded when CSE works) → hard skip. */
 export const STRONG_REVIEW_HARD_SKIP = 150;
+/**
+ * When Custom Search is unavailable, treat this lower review count + website as
+ * "already winning enough" — without organic we cannot prove weakness.
+ */
+export const STRONG_REVIEW_HARD_SKIP_NO_CSE = 60;
 /** site: totalResults at or below this counts as thin index. */
 export const THIN_SITE_INDEX_MAX = 5;
-/** Minimum opportunity score to keep when no critical Maps gap. */
+/** Minimum opportunity score to keep when no critical Maps gap (CSE path only). */
 export const MIN_OPPORTUNITY_KEEP = 35;
 
 export type OpportunityBreakdown = {
@@ -151,18 +156,30 @@ export function shouldHardSkipStrongPresence(
 ): boolean {
   const reviews = profile.review_count ?? 0;
   const website = hasRealWebsite(profile.website);
-  if (reviews < STRONG_REVIEW_HARD_SKIP || !website) return false;
+  const cseUnavailable = !organic || organic.skipped;
+  const reviewCeiling = cseUnavailable ? STRONG_REVIEW_HARD_SKIP_NO_CSE : STRONG_REVIEW_HARD_SKIP;
+
+  if (reviews < reviewCeiling || !website) return false;
 
   // Strong review + website is enough to skip when organic confirms brand presence,
-  // or when organic was skipped (don't queue obvious giants on Maps-only path).
-  if (!organic || organic.skipped) return true;
+  // or when organic was skipped (don't queue mid/strong Maps listings without CSE).
+  if (cseUnavailable) return true;
   if (organic.branded_hit === true) return true;
   if (typeof organic.site_total_results === "number" && organic.site_total_results > 50) return true;
   return false;
 }
 
-export function shouldKeepWeakProspect(breakdown: OpportunityBreakdown): boolean {
+/**
+ * Keep only closable weak prospects.
+ * Without CSE: require a critical Maps gap (no website / <15 reviews / no hours).
+ * With CSE: critical gap OR opportunity score ≥ MIN_OPPORTUNITY_KEEP.
+ */
+export function shouldKeepWeakProspect(
+  breakdown: OpportunityBreakdown,
+  organic?: OrganicFootprint | null,
+): boolean {
   if (breakdown.criticalMapsGap) return true;
+  if (!organic || organic.skipped) return false;
   return breakdown.total >= MIN_OPPORTUNITY_KEEP;
 }
 

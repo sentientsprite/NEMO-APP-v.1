@@ -35,6 +35,11 @@ const STRONG_REVIEW_HARD_SKIP = Math.max(
   50,
   parseInt(process.env.STRONG_REVIEW_HARD_SKIP || "150", 10) || 150,
 );
+/** When CSE is skipped, hard-skip website + reviews at/above this (Maps-only safety). */
+const STRONG_REVIEW_HARD_SKIP_NO_CSE = Math.max(
+  30,
+  parseInt(process.env.STRONG_REVIEW_HARD_SKIP_NO_CSE || "60", 10) || 60,
+);
 const MIN_OPPORTUNITY = Math.max(0, parseInt(process.env.MIN_OPPORTUNITY || "35", 10) || 35);
 const POOL_MULTIPLIER = Math.min(12, Math.max(2, parseInt(process.env.POOL_MULTIPLIER || "6", 10) || 6));
 const THIN_SITE_MAX = 5;
@@ -230,11 +235,19 @@ function scoreOpportunity(det, organic) {
 function hardSkip(det, organic) {
   const reviews = det.user_ratings_total ?? 0;
   const website = Boolean(det.website?.trim());
-  if (reviews < STRONG_REVIEW_HARD_SKIP || !website) return false;
-  if (!organic || organic.skipped) return true;
+  const cseUnavailable = !organic || organic.skipped;
+  const ceiling = cseUnavailable ? STRONG_REVIEW_HARD_SKIP_NO_CSE : STRONG_REVIEW_HARD_SKIP;
+  if (reviews < ceiling || !website) return false;
+  if (cseUnavailable) return true;
   if (organic.branded_hit === true) return true;
   if (typeof organic.site_total_results === "number" && organic.site_total_results > 50) return true;
   return false;
+}
+
+function shouldKeep(breakdown, organic) {
+  if (breakdown.critical) return true;
+  if (!organic || organic.skipped) return false;
+  return breakdown.total >= MIN_OPPORTUNITY;
 }
 
 async function textSearch(query) {
@@ -330,7 +343,7 @@ for (const { hit, query } of staged) {
   if (hardSkip(det, organic)) continue;
 
   const { total, reasons, critical } = scoreOpportunity(det, organic);
-  if (!critical && total < MIN_OPPORTUNITY) continue;
+  if (!shouldKeep({ total, critical }, organic)) continue;
 
   enriched.push({ hit, query, det, organic, score: total, reasons });
 }

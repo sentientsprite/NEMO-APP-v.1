@@ -144,6 +144,8 @@ async function runPlacesSync(maxLeads: number): Promise<HunterSyncResult> {
   };
 
   const ranked: Ranked[] = [];
+  let sawOrganicSkip = false;
+  let cseBlockedReason: string | undefined;
 
   for (const c of candidates) {
     let det: Awaited<ReturnType<typeof fetchPlaceDetails>>;
@@ -165,12 +167,16 @@ async function runPlacesSync(maxLeads: number): Promise<HunterSyncResult> {
       businessName: name,
       city,
     });
+    if (organic.skipped) {
+      sawOrganicSkip = true;
+      cseBlockedReason = organic.reason || cseBlockedReason;
+    }
     profile = { ...profile, organic };
 
     if (shouldHardSkipStrongPresence(profile, organic)) continue;
 
     const breakdown = combineOpportunityScore(profile, organic);
-    if (!shouldKeepWeakProspect(breakdown)) continue;
+    if (!shouldKeepWeakProspect(breakdown, organic)) continue;
 
     profile = { ...profile, opportunity_score: breakdown.total };
 
@@ -188,6 +194,7 @@ async function runPlacesSync(maxLeads: number): Promise<HunterSyncResult> {
 
   ranked.sort((a, b) => b.opportunity - a.opportunity);
   const winners = ranked.slice(0, maxLeads);
+  const organicSkipped = sawOrganicSkip;
 
   let posted = 0;
   for (const w of winners) {
@@ -235,7 +242,11 @@ async function runPlacesSync(maxLeads: number): Promise<HunterSyncResult> {
     ok: true,
     mode: "places",
     posted,
-    message: `Weak-presence Leadfinder posted ${posted} lead(s)${cseOn ? " (Maps + CSE)" : " (Maps only; add GOOGLE_CSE_CX for organic)"}. Refresh the queue.`,
+    message: cseOn && !organicSkipped
+      ? `Weak-presence Leadfinder posted ${posted} lead(s) (Maps + organic). Only critical Maps gaps or weak site:/branded. Refresh the queue.`
+      : cseOn && organicSkipped
+        ? `Weak-presence posted ${posted} (Maps-only keepers: no website / <15 reviews / missing hours). CSE blocked: ${cseBlockedReason || "enable Custom Search API + billing on the GCP project for GOOGLE_CSE_API_KEY"}. Refresh the queue.`
+        : `Weak-presence posted ${posted} (Maps-only; set GOOGLE_CSE_CX for organic). Refresh the queue.`,
   };
 }
 
