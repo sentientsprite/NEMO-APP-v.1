@@ -15,6 +15,16 @@ Route by task type. Default cheap; escalate when quality determines the outcome.
 
 Env vars: `NEMO_AI_MODEL_BULK`, `NEMO_AI_MODEL_CRITICAL`. Disable routing: `NEMO_AI_ROUTING=0`.
 
+Token budgets (approx): researcher 8192 · builder 12288 · story/spec/validator 6144 · else 4096. Empty+`length` retries once at 2×.
+
+### Live audits (URL ingest)
+
+| Signal | Env | Notes |
+|--------|-----|-------|
+| On-page HTML | always | title, meta, H1s, schema flags |
+| PageSpeed | `GOOGLE_PAGESPEED_API_KEY` or `GOOGLE_MAPS_API_KEY` | mobile + desktop Lighthouse |
+| Places / GBP | `GOOGLE_MAPS_API_KEY` | Places API (New) text search |
+
 ## Cursor / daily dev
 
 | Task | Model | Notes |

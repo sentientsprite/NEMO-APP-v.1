@@ -122,6 +122,10 @@ export interface ImportedUrl {
   contentType?: string;
   /** Deterministic on-page SEO signals when HTML was fetched. */
   onPageAudit?: string;
+  /** Optional PageSpeed Insights markdown (env-gated). */
+  pageSpeedAudit?: string;
+  /** Optional Google Places / GBP markdown (env-gated). */
+  placesAudit?: string;
 }
 
 async function readResponseText(res: Response, maxBytes: number): Promise<string> {
@@ -287,7 +291,22 @@ export async function gatherUrlContext(
   for (const url of urls) {
     try {
       const result = await importUrl(url);
-      imported.push({ ...result, content: result.content.slice(0, perUrlChars) });
+      const clipped = { ...result, content: result.content.slice(0, perUrlChars) };
+
+      try {
+        const { enrichWithLiveAudits } = await import("./live-audits");
+        const live = await enrichWithLiveAudits({
+          url: clipped.url,
+          title: clipped.title,
+          content: clipped.content,
+        });
+        if (live.pagespeedMarkdown) clipped.pageSpeedAudit = live.pagespeedMarkdown;
+        if (live.placesMarkdown) clipped.placesAudit = live.placesMarkdown;
+      } catch {
+        // Live audits never block URL ingest.
+      }
+
+      imported.push(clipped);
     } catch (error) {
       failed.push({ url, error: error instanceof Error ? error.message : "fetch failed" });
     }
@@ -297,7 +316,9 @@ export async function gatherUrlContext(
     .map((doc) => {
       const summary = doc.description ? `_Summary:_ ${doc.description}\n` : "";
       const audit = doc.onPageAudit ? `\n${doc.onPageAudit}\n` : "";
-      return `### Source: ${doc.title} (${doc.url})\n_fetched ${doc.fetchedAt}_\n${summary}${audit}${doc.content}`;
+      const psi = doc.pageSpeedAudit ? `\n${doc.pageSpeedAudit}\n` : "";
+      const places = doc.placesAudit ? `\n${doc.placesAudit}\n` : "";
+      return `### Source: ${doc.title} (${doc.url})\n_fetched ${doc.fetchedAt}_\n${summary}${audit}${psi}${places}${doc.content}`;
     })
     .join("\n\n");
 

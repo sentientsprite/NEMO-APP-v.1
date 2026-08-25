@@ -18,7 +18,10 @@ import { getPlan } from "@/lib/plan";
 /** Researcher digests long URL/memory context — 1400 truncated Kimi to empty markdown. */
 function maxOutputTokensForRole(role: AgentRole): number {
   if (role === "researcher") return 8192;
-  if (role === "builder") return 6144;
+  // Builder compiles full reports; previously hit finishReason=length at 6144.
+  if (role === "builder") return 12288;
+  if (role === "spec_writer" || role === "story_writer") return 6144;
+  if (role === "validator") return 6144;
   return 4096;
 }
 
@@ -182,11 +185,19 @@ export async function runAgent(input: AgentRunInput): Promise<AgentRunOutput> {
 /** Exposed for /api/plan and UI. */
 export function getAgentModeSummary() {
   const plan = getPlan();
+  const pagespeed = Boolean(
+    process.env.GOOGLE_PAGESPEED_API_KEY?.trim() ||
+      process.env.PAGESPEED_API_KEY?.trim() ||
+      process.env.GOOGLE_MAPS_API_KEY?.trim(),
+  );
+  const places = Boolean(process.env.GOOGLE_MAPS_API_KEY?.trim());
+
   return {
     tier: plan.tier,
     label: plan.label,
     liveAi: plan.liveAi,
     strictAi: plan.strictAi,
     routing: getModelRoutingSummary(),
+    liveAudits: { pagespeed, places },
   };
 }
