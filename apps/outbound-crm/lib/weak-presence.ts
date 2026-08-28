@@ -37,8 +37,10 @@ export type ProspectGrade = "A" | "B" | "C" | "D" | "F";
 /** Sellable Nemo packages inferred from Maps / organic gaps. */
 export type ServicePackageId =
   | "gbp_management"
+  | "gbp_category_fix"
   | "photo_management"
   | "review_sms_funnel"
+  | "review_reply_sprint"
   | "website_build_or_fix"
   | "local_seo_sem_geo_aeo"
   | "social_presence"
@@ -88,7 +90,7 @@ export function isCOrBelow(grade: ProspectGrade): boolean {
 export function listServicePackageGaps(
   profile: Pick<
     LeadProfile,
-    "website" | "review_count" | "has_hours" | "photo_count" | "rating"
+    "website" | "review_count" | "has_hours" | "photo_count" | "rating" | "types"
   >,
   organic: OrganicFootprint | null | undefined,
 ): ServicePackageGap[] {
@@ -96,6 +98,19 @@ export function listServicePackageGaps(
   const reviews = profile.review_count ?? 0;
   const website = hasRealWebsite(profile.website);
   const photos = profile.photo_count ?? 0;
+  const rating = profile.rating ?? 0;
+
+  const types = (profile.types ?? []).join(" ");
+  if (
+    /\bestablishment\b/i.test(types) &&
+    !/\b(plomb|hvac|electr|roof|contractor|seal|landscap|dental|paint|garage|pest|fence)\b/i.test(types)
+  ) {
+    packages.push({
+      id: "gbp_category_fix",
+      label: "GBP primary category correction",
+      severity: "warning",
+    });
+  }
 
   if (profile.has_hours === false) {
     packages.push({
@@ -124,6 +139,14 @@ export function listServicePackageGaps(
       id: "review_sms_funnel",
       label: "SMS review funnel / review velocity",
       severity: "warning",
+    });
+  }
+
+  if (rating > 0 && rating < 4.2 && reviews >= 10) {
+    packages.push({
+      id: "review_reply_sprint",
+      label: "Review recovery + reply sprint",
+      severity: rating < 4.0 ? "critical" : "warning",
     });
   }
 
@@ -499,8 +522,8 @@ export function shouldHardSkipStrongPresence(
 }
 
 /**
- * Keep only when live SERP proves a service-category / brand / site miss
- * that maps to a 1:1 Nemo package, and grade is C / D / F.
+ * Keep only when SERP proves they are not winning category/brand/site —
+ * not “low reviews but already ranking.”
  */
 export function shouldKeepWeakProspect(
   breakdown: OpportunityBreakdown,
@@ -510,17 +533,40 @@ export function shouldKeepWeakProspect(
   if (!organic || organic.skipped) return false;
   if (!isCOrBelow(breakdown.estimatedGrade)) return false;
   if (!hasSerpOrganicFailure(profile, organic)) return false;
+
+  const website = hasRealWebsite(profile.website);
+  const siteN = organic.site_total_results;
+  const siteBroken = website && typeof siteN === "number" && siteN <= THIN_SITE_INDEX_MAX;
+  const categoryMiss = organic.category_hit === false;
+  const brandedMiss = organic.branded_hit === false;
+
+  // Primary ICP: not showing for the trade+city query (or no site / broken index / brand miss).
+  if (!categoryMiss && !brandedMiss && !siteBroken && website) {
+    return false;
+  }
+
   if (breakdown.packages.length < MIN_PACKAGE_GAPS) return false;
-  // Need real opportunity unless category or branded miss is explicit.
   if (
     breakdown.total < MIN_OPPORTUNITY_KEEP &&
     !breakdown.criticalMapsGap &&
-    organic.category_hit !== false &&
-    organic.branded_hit !== false
+    !categoryMiss &&
+    !brandedMiss
   ) {
     return false;
   }
   return true;
+}
+
+/** Sort keepers: category miss first, then higher opportunity. */
+export function rankHunterKeepers<T extends { opportunity: number; organic: OrganicFootprint }>(
+  ranked: T[],
+): T[] {
+  return [...ranked].sort((a, b) => {
+    const aCat = a.organic.category_hit === false ? 1 : 0;
+    const bCat = b.organic.category_hit === false ? 1 : 0;
+    if (bCat !== aCat) return bCat - aCat;
+    return b.opportunity - a.opportunity;
+  });
 }
 
 export function formatPackageNotes(packages: ServicePackageGap[]): string {

@@ -103,3 +103,27 @@ export function auditHintFromNotes(notes: string | null | undefined): {
   if (report) return { done: true, label: "LVS done" };
   return { done: false, label: "No LVS yet" };
 }
+
+/** One-line Hunter pitch for queue cards (category / packages). */
+export function hunterPitchFromLead(
+  lead: Pick<OutboundLead, "notes" | "profile" | "source">,
+): string | null {
+  if (!lead.source?.includes("hunter")) return null;
+  const profile = resolveLeadProfile(lead);
+  if (!profile) return null;
+
+  const parts: string[] = [];
+  if (profile.estimated_grade) parts.push(`Est ${profile.estimated_grade}`);
+
+  const organic = profile.organic;
+  if (organic && !organic.skipped) {
+    if (organic.category_hit === false) parts.push("category miss");
+    else if (organic.category_hit) parts.push(`category #${organic.category_rank ?? "?"}`);
+    if (organic.branded_hit === false) parts.push("branded miss");
+  }
+
+  const pk = profile.service_packages ?? [];
+  if (pk.length) parts.push(pk.slice(0, 2).join(", "));
+
+  return parts.length ? parts.join(" · ") : null;
+}

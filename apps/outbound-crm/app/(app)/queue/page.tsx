@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 import { RunHunterWorkflowButton } from "@/components/RunHunterWorkflowButton";
-import { auditHintFromLead, leadChannel } from "@/lib/lead-ux";
+import { auditHintFromLead, hunterPitchFromLead, leadChannel } from "@/lib/lead-ux";
 import { createClient } from "@/lib/supabase/server";
 import type { OutboundLead } from "@/lib/types";
 import { isLeadStatus, LEAD_STATUSES } from "@/lib/types";
@@ -111,6 +111,7 @@ export default async function QueuePage({ searchParams }: PageProps) {
           rows.map((lead) => {
             const channel = leadChannel(lead);
             const audit = auditHintFromLead(lead);
+            const hunterPitch = hunterPitchFromLead(lead);
             const mailto = lead.email
               ? `mailto:${encodeURIComponent(lead.email)}?subject=${encodeURIComponent(`Prana — ${lead.name}`)}`
               : null;
@@ -151,6 +152,9 @@ export default async function QueuePage({ searchParams }: PageProps) {
                     <p className="text-xs uppercase tracking-wide text-slate-500">
                       {lead.status} · {lead.source ?? "—"}
                     </p>
+                    {hunterPitch ? (
+                      <p className="mt-1 text-xs font-medium text-indigo-800">{hunterPitch}</p>
+                    ) : null}
                     {channel === "call" ? (
                       <p className="mt-2 font-mono text-sm text-slate-800">{lead.phone}</p>
                     ) : (
