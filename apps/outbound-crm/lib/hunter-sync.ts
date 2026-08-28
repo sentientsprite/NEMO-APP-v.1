@@ -20,6 +20,7 @@ import {
   formatOrganicNotes,
   formatPackageNotes,
   mapsWorthSerpSpend,
+  rankHunterKeepers,
   shouldHardSkipStrongPresence,
   shouldKeepWeakProspect,
   type ProspectGrade,
@@ -300,8 +301,7 @@ async function runPlacesSync(maxLeads: number): Promise<HunterSyncResult> {
     knownPlaceIds.add(placeId);
   }
 
-  ranked.sort((a, b) => b.opportunity - a.opportunity);
-  const winners = ranked.slice(0, target);
+  const winners = rankHunterKeepers(ranked).slice(0, target);
 
   let posted = 0;
   for (const w of winners) {
